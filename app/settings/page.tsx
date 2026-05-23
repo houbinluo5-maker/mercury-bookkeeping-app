@@ -19,12 +19,18 @@ export default function SettingsPage() {
     resetDemoData,
     transactions,
     exportBackup,
-    importBackup
+    importBackup,
+    storageStatus,
+    syncToSupabase,
+    loadFromSupabase,
+    migrateLocalDataToSupabase
   } = useBookkeeping();
   const [draft, setDraft] = useState<AppSettings>(settings);
   const [saved, setSaved] = useState(false);
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [importStatus, setImportStatus] = useState("");
+  const [storageActionStatus, setStorageActionStatus] = useState("");
+  const [storageBusy, setStorageBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { t } = useI18n();
 
@@ -73,6 +79,30 @@ export default function SettingsPage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  function storageStatusLabel() {
+    if (storageStatus.mode === "checking") return t("checkingStorage");
+    if (storageStatus.mode === "supabase") return t("supabaseConnected");
+    if (storageStatus.mode === "error") return t("supabaseError");
+    return t("localStorageMode");
+  }
+
+  function storageStatusTone(): "neutral" | "green" | "amber" | "red" | "blue" {
+    if (storageStatus.mode === "supabase") return "green";
+    if (storageStatus.mode === "error") return "red";
+    if (storageStatus.mode === "checking") return "blue";
+    return "amber";
+  }
+
+  async function runStorageAction(action: () => Promise<boolean>, successKey: string) {
+    setStorageBusy(true);
+    setStorageActionStatus("");
+
+    const ok = await action();
+
+    setStorageActionStatus(ok ? t(successKey) : storageStatus.message || t("supabaseNotConfiguredWarning"));
+    setStorageBusy(false);
   }
 
   async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
@@ -217,6 +247,81 @@ export default function SettingsPage() {
       </form>
 
       <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("supabasePersistence")}</h2>
+            <p className="mt-1 text-sm text-slate-600">{t("supabasePersistenceHelp")}</p>
+          </div>
+          <Badge tone={storageStatusTone()}>{storageStatusLabel()}</Badge>
+        </div>
+
+        {storageStatus.mode === "local" || storageStatus.mode === "error" ? (
+          <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              {storageStatus.mode === "error"
+                ? storageStatus.message
+                : t("localStorageFallbackWarning")}
+            </p>
+          </div>
+        ) : null}
+
+        <section className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+            <p className="form-label">{t("storageStatus")}</p>
+            <div className="mt-3">
+              <Badge tone={storageStatusTone()}>{storageStatusLabel()}</Badge>
+            </div>
+          </div>
+          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+            <p className="form-label">{t("transactions")}</p>
+            <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
+          </div>
+          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+            <p className="form-label">{t("dataSource")}</p>
+            <div className="mt-3">
+              <Badge tone={storageStatus.mode === "supabase" ? "green" : "amber"}>
+                {storageStatus.mode === "supabase" ? t("supabaseConnected") : t("localStorageMode")}
+              </Badge>
+            </div>
+          </div>
+        </section>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={storageBusy}
+            onClick={() => runStorageAction(syncToSupabase, "syncedToSupabase")}
+          >
+            <Database aria-hidden="true" className="h-4 w-4" />
+            {t("syncToSupabase")}
+          </Button>
+          <Button
+            disabled={storageBusy}
+            onClick={() => runStorageAction(loadFromSupabase, "loadedFromSupabase")}
+          >
+            <Download aria-hidden="true" className="h-4 w-4" />
+            {t("loadFromSupabase")}
+          </Button>
+          <Button
+            disabled={storageBusy}
+            onClick={() => runStorageAction(migrateLocalDataToSupabase, "migratedToSupabase")}
+          >
+            <Upload aria-hidden="true" className="h-4 w-4" />
+            {t("migrateLocalDataToSupabase")}
+          </Button>
+          <Button onClick={downloadBackupJson}>
+            <FileJson aria-hidden="true" className="h-4 w-4" />
+            {t("exportLocalBackupJson")}
+          </Button>
+          <Button onClick={() => fileInputRef.current?.click()}>
+            <Upload aria-hidden="true" className="h-4 w-4" />
+            {t("importLocalBackupJson")}
+          </Button>
+          {storageActionStatus ? <Badge tone="blue">{storageActionStatus}</Badge> : null}
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
         <div>
           <h2 className="text-lg font-semibold tracking-normal text-ink">{t("dataManagement")}</h2>
           <div className="mt-3 flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
@@ -229,7 +334,9 @@ export default function SettingsPage() {
           <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
             <p className="form-label">{t("dataSource")}</p>
             <div className="mt-3">
-              <Badge tone="blue">{t("seedDataLocalStorage")}</Badge>
+              <Badge tone={storageStatus.mode === "supabase" ? "green" : "amber"}>
+                {storageStatus.mode === "supabase" ? t("supabaseConnected") : t("seedDataLocalStorage")}
+              </Badge>
             </div>
           </div>
           <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
@@ -247,11 +354,11 @@ export default function SettingsPage() {
         <div className="flex flex-wrap gap-2">
           <Button onClick={downloadBackupJson}>
             <FileJson aria-hidden="true" className="h-4 w-4" />
-            {t("downloadBackup")}
+            {t("exportLocalBackupJson")}
           </Button>
           <Button onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
-            {t("restoreBackup")}
+            {t("importLocalBackupJson")}
           </Button>
           <input
             accept="application/json,.json"

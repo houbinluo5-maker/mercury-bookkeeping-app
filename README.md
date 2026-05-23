@@ -1,6 +1,6 @@
 # Mercury Bookkeeping App
 
-Private bookkeeping MVP for a US LLC ecommerce business. The first version is manual-entry only and runs from local sample data plus browser `localStorage`; it does not connect to Mercury, Shopify, Meta, TikTok, Supabase, or real bank APIs.
+Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry only and can use Supabase PostgreSQL for persistence when configured, with browser `localStorage` backup/restore kept as a fallback. It does not connect to Mercury, Shopify, Meta, TikTok, or real bank APIs.
 
 ## Stack
 
@@ -8,6 +8,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - TypeScript
 - Tailwind CSS
 - Simple admin-password cookie auth for MVP private access
+- Supabase PostgreSQL persistence through protected server-side API routes
 - Browser-side Excel-compatible `.xls` export
 - Local seed data in `lib/seed-data.ts`
 
@@ -26,6 +27,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - Excel export for transactions, reports, and annual summaries
 - Login/logout gate for private app access
 - Data Management tools for clearing demo data, JSON backup, and JSON restore
+- Supabase sync, load, and localStorage migration tools in Settings
 - Transaction editing and deletion with automatic report updates
 - Receipt filters for missing receipts, linked receipts, and reconciliation status
 - English / Simplified Chinese language switch without mixing both languages in navigation or table headers
@@ -73,6 +75,13 @@ Set an admin password:
 
 ```bash
 ADMIN_PASSWORD=choose-a-long-private-password
+```
+
+Supabase is optional for local development. Leave these empty to keep using browser `localStorage`, or set them after creating the database schema:
+
+```bash
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ```
 
 If `ADMIN_PASSWORD` is missing, the login page shows a setup warning in development and protected pages redirect to `/login`.
@@ -143,9 +152,71 @@ Transactions include:
 
 The app also stores a generated `id` and `created_at` timestamp for local UI state.
 
+Supabase rows also include `updated_at`.
+
+## Supabase Persistence
+
+Supabase is the primary data source when both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured. Supabase Auth is not used yet; the existing `ADMIN_PASSWORD` login remains the access gate.
+
+### Create A Supabase Project
+
+1. Create a project at Supabase.
+2. Open the project dashboard.
+3. Go to Project Settings -> API.
+4. Copy the Project URL into `SUPABASE_URL`.
+5. Copy the service role key into `SUPABASE_SERVICE_ROLE_KEY`.
+
+Keep the service role key server-only. Do not add it to `NEXT_PUBLIC_*` variables or client code.
+
+### Run The SQL Schema
+
+Open the Supabase SQL editor and run:
+
+```text
+supabase/migrations/202605230001_bookkeeping_schema.sql
+```
+
+The migration creates:
+
+- `transactions`
+- `categories`
+- `receipts`
+- `company_settings`
+
+RLS is enabled without public policies. The app reads and writes through protected server-side API routes using the service role key.
+
+### Vercel Environment Variables
+
+In Vercel, add these variables for the deployed app:
+
+```bash
+ADMIN_PASSWORD=choose-a-long-private-password
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+```
+
+Redeploy after changing environment variables.
+
+### Migrate Local Data To Supabase
+
+1. Log in to the app.
+2. Open Settings.
+3. Check the Storage Status badge.
+4. Select `Migrate local data to Supabase` to push the current browser localStorage data into Supabase.
+5. Use `Load from Supabase` to reload the app from the database.
+6. Use `Sync to Supabase` when you want to push the current in-app data snapshot to Supabase.
+
+The sync operation writes transactions, categories, receipt fields, and company settings. Backup export still uses the current in-app data, whether it came from Supabase or localStorage.
+
+### Fall Back To LocalStorage
+
+If `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing, the app automatically uses browser `localStorage`. Settings shows `Local storage mode` and keeps JSON backup/import available.
+
+If Supabase is temporarily unavailable, export a local backup JSON before making risky changes. Once Supabase is available again, use Settings -> Supabase Persistence -> `Sync to Supabase`.
+
 ## Data Management
 
-The current MVP stores data in browser `localStorage`. That means data is private to the browser profile and device being used, but it can be lost if browser storage is cleared. Use Settings -> Data Management regularly.
+The app keeps localStorage backup/restore available even when Supabase is configured. Browser storage is private to the browser profile and device being used, but it can be lost if browser storage is cleared. Use Settings -> Data Management regularly.
 
 ### Clearing Demo Data
 
@@ -159,7 +230,7 @@ This removes all locally stored transactions in the current browser, including d
 ### Backing Up Data
 
 1. Open Settings.
-2. Select `Download backup`.
+2. Select `Export local backup JSON`.
 3. Keep the exported JSON file somewhere private and secure.
 
 The JSON backup includes transactions, categories, receipt status/link data, and company settings.
@@ -167,10 +238,10 @@ The JSON backup includes transactions, categories, receipt status/link data, and
 ### Restoring Data
 
 1. Open Settings.
-2. Select `Restore backup`.
+2. Select `Import local backup JSON`.
 3. Choose a JSON file previously exported from this app.
 
-Restoring replaces the local transactions, categories, and settings in the current browser. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
+Restoring replaces the local transactions, categories, and settings in the current browser. If Supabase mode is active, the restored snapshot is also synced to Supabase. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
 
 ## Language Switching
 
@@ -187,7 +258,7 @@ The language switch translates navigation, page headings, labels, buttons, filte
 
 Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Deleting a transaction asks for confirmation first.
 
-Dashboard totals, monthly reports, quarterly reports, annual tax summary, receipts, and transaction exports read from the same localStorage data, so edits and deletes update those views automatically.
+Dashboard totals, monthly reports, quarterly reports, annual tax summary, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
 
 ## Receipt Links And Reconciliation
 
@@ -198,17 +269,9 @@ Use the Receipts page to add or update receipt links. Good support documents inc
 - `Needs reconciliation`: the transaction is not marked reconciled yet, commonly used for Shopify payouts or ad invoices that need matching against source reports.
 - `Reconciled`: the transaction has been reviewed against its source documentation.
 
-## Future Supabase Integration
+## Future Improvements
 
-The current app keeps all data in `localStorage`, so each browser profile has its own copy. Supabase can be added later by:
-
-1. Creating tables for `transactions`, `categories`, `settings`, and `receipts`.
-2. Moving `lib/storage.tsx` behind a repository/service layer.
-3. Replacing local mutations with Supabase queries and row-level security.
-4. Adding authentication for the LLC owner/admin role.
-5. Storing receipt files in Supabase Storage or another private object store.
-
-Environment placeholders are included in `.env.example`.
+Future production hardening can add Supabase Auth, per-user roles, audit logs, server-side validation, and private receipt file storage in Supabase Storage or another object store.
 
 ## Integration Guardrails
 
