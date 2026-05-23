@@ -37,6 +37,8 @@ type BookkeepingContextValue = {
 };
 
 type StorageApiResponse = {
+  apiStatus?: number;
+  apiStatusText?: string;
   configured: boolean;
   data?: LocalBackup;
   error?: string;
@@ -49,6 +51,8 @@ const SETTINGS_KEY = "mercury-bookkeeping-settings";
 const CATEGORIES_KEY = "mercury-bookkeeping-categories";
 
 const localStorageStatus: StorageStatus = {
+  apiStatus: 200,
+  apiStatusText: "OK",
   configured: false,
   mode: "local",
   message: "Supabase is not configured. Using browser localStorage."
@@ -195,13 +199,44 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         headers: backup ? { "Content-Type": "application/json" } : undefined,
         body: backup ? JSON.stringify(backup) : undefined
       });
-      const result = (await response.json()) as StorageApiResponse;
+      const responseText = await response.text();
+      let result: StorageApiResponse | null = null;
 
-      if (!response.ok) {
-        throw new Error(result.error || result.message || "Storage request failed.");
+      if (responseText.trim()) {
+        try {
+          result = JSON.parse(responseText) as StorageApiResponse;
+        } catch {
+          throw new Error(
+            `Storage API returned invalid JSON. HTTP ${response.status} ${response.statusText}. ${responseText.slice(0, 240)}`
+          );
+        }
       }
 
-      return result;
+      if (!result && !response.ok) {
+        throw new Error(`Storage API request failed. HTTP ${response.status} ${response.statusText}.`);
+      }
+
+      if (!result) {
+        return {
+          apiStatus: response.status,
+          apiStatusText: response.statusText,
+          configured: false,
+          message: "Storage API returned an empty successful response; using localStorage fallback.",
+          mode: "local"
+        };
+      }
+
+      if (!response.ok) {
+        const detail = result.error || result.message || "Storage request failed.";
+
+        throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
+      }
+
+      return {
+        ...result,
+        apiStatus: result.apiStatus ?? response.status,
+        apiStatusText: result.apiStatusText ?? response.statusText
+      };
     },
     []
   );
@@ -211,7 +246,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       const result = await requestStorage("GET");
 
       if (!result.configured) {
-        setStorageStatus(localStorageStatus);
+        setStorageStatus({
+          ...localStorageStatus,
+          apiStatus: result.apiStatus,
+          apiStatusText: result.apiStatusText,
+          message: result.message || localStorageStatus.message
+        });
         return false;
       }
 
@@ -220,6 +260,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       }
 
       setStorageStatus({
+        apiStatus: result.apiStatus,
+        apiStatusText: result.apiStatusText,
         configured: true,
         mode: "supabase",
         message: result.message || "Supabase connected."
@@ -227,7 +269,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       return true;
     } catch (error) {
       setStorageStatus({
+        apiStatus: 0,
+        apiStatusText: "Client error",
         configured: true,
+        error: error instanceof Error ? error.message : "Supabase request failed.",
         mode: "error",
         message: error instanceof Error ? error.message : "Supabase request failed."
       });
@@ -241,7 +286,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         const result = await requestStorage("PUT", backup);
 
         if (!result.configured) {
-          setStorageStatus(localStorageStatus);
+          setStorageStatus({
+            ...localStorageStatus,
+            apiStatus: result.apiStatus,
+            apiStatusText: result.apiStatusText,
+            message: result.message || localStorageStatus.message
+          });
           return false;
         }
 
@@ -250,6 +300,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         }
 
         setStorageStatus({
+          apiStatus: result.apiStatus,
+          apiStatusText: result.apiStatusText,
           configured: true,
           mode: "supabase",
           message: result.message || "Supabase synced."
@@ -257,7 +309,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         return true;
       } catch (error) {
         setStorageStatus({
+          apiStatus: 0,
+          apiStatusText: "Client error",
           configured: true,
+          error: error instanceof Error ? error.message : "Supabase sync failed.",
           mode: "error",
           message: error instanceof Error ? error.message : "Supabase sync failed."
         });
