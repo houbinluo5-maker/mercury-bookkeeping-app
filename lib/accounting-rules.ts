@@ -52,7 +52,7 @@ export function classifyTransaction(
     });
   }
 
-  if (/meta ads|facebook ads|facebook|meta platforms|tiktok ads|tiktok/.test(text)) {
+  if (/meta ads|facebook ads|instagram ads|facebook|instagram|meta platforms|tiktok ads|tiktok/.test(text)) {
     return result("Advertising Expense", "Ad platforms are advertising expense.");
   }
 
