@@ -9,20 +9,25 @@ import {
   useState
 } from "react";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
-import type { AppSettings, Transaction, TransactionDraft } from "@/lib/types";
+import type { AppSettings, Category, LocalBackup, Transaction, TransactionDraft } from "@/lib/types";
 
 type BookkeepingContextValue = {
   transactions: Transaction[];
   settings: AppSettings;
-  categories: typeof categories;
+  categories: Category[];
   addTransaction: (transaction: TransactionDraft) => Transaction;
   updateTransaction: (id: string, transaction: Partial<TransactionDraft>) => void;
+  deleteTransaction: (id: string) => void;
   updateSettings: (settings: AppSettings) => void;
+  clearTransactions: () => void;
   resetDemoData: () => void;
+  exportBackup: () => LocalBackup;
+  importBackup: (backup: LocalBackup) => void;
 };
 
 const TRANSACTIONS_KEY = "mercury-bookkeeping-transactions";
 const SETTINGS_KEY = "mercury-bookkeeping-settings";
+const CATEGORIES_KEY = "mercury-bookkeeping-categories";
 
 const BookkeepingContext = createContext<BookkeepingContextValue | null>(null);
 
@@ -45,15 +50,35 @@ function createId() {
   return `txn-${Date.now()}`;
 }
 
+function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
+  return {
+    ...defaultSettings,
+    ...settings
+  };
+}
+
+function normalizeBackup(backup: LocalBackup): LocalBackup {
+  return {
+    exported_at: backup.exported_at || new Date().toISOString(),
+    version: 1,
+    transactions: Array.isArray(backup.transactions) ? backup.transactions : [],
+    categories: Array.isArray(backup.categories) ? backup.categories : categories,
+    receipts: Array.isArray(backup.receipts) ? backup.receipts : [],
+    settings: normalizeSettings(backup.settings ?? defaultSettings)
+  };
+}
+
 export function BookkeepingProvider({ children }: { children: React.ReactNode }) {
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [categoryState, setCategoryState] = useState<Category[]>(categories);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setTransactions(loadJson(TRANSACTIONS_KEY, seedTransactions));
-      setSettings(loadJson(SETTINGS_KEY, defaultSettings));
+      setSettings(normalizeSettings(loadJson(SETTINGS_KEY, defaultSettings)));
+      setCategoryState(loadJson(CATEGORIES_KEY, categories));
       setLoaded(true);
     }, 0);
 
@@ -71,6 +96,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     }
   }, [loaded, settings]);
+
+  useEffect(() => {
+    if (loaded) {
+      window.localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categoryState));
+    }
+  }, [categoryState, loaded]);
 
   const addTransaction = useCallback((draft: TransactionDraft) => {
     const transaction: Transaction = {
@@ -94,26 +125,75 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     );
   }, []);
 
+  const deleteTransaction = useCallback((id: string) => {
+    setTransactions((current) => current.filter((transaction) => transaction.id !== id));
+  }, []);
+
   const updateSettings = useCallback((nextSettings: AppSettings) => {
-    setSettings(nextSettings);
+    setSettings(normalizeSettings(nextSettings));
+  }, []);
+
+  const clearTransactions = useCallback(() => {
+    setTransactions([]);
   }, []);
 
   const resetDemoData = useCallback(() => {
     setTransactions(seedTransactions);
     setSettings(defaultSettings);
+    setCategoryState(categories);
+  }, []);
+
+  const exportBackup = useCallback<() => LocalBackup>(() => {
+    return {
+      exported_at: new Date().toISOString(),
+      version: 1,
+      transactions,
+      categories: categoryState,
+      receipts: transactions.map((transaction) => ({
+        transaction_id: transaction.id,
+        receipt_required: transaction.receipt_required,
+        receipt_link: transaction.receipt_link,
+        reconciled: transaction.reconciled
+      })),
+      settings
+    };
+  }, [categoryState, settings, transactions]);
+
+  const importBackup = useCallback((backup: LocalBackup) => {
+    const normalized = normalizeBackup(backup);
+
+    setTransactions(normalized.transactions);
+    setCategoryState(normalized.categories);
+    setSettings(normalized.settings);
   }, []);
 
   const value = useMemo<BookkeepingContextValue>(
     () => ({
       transactions,
       settings,
-      categories,
+      categories: categoryState,
       addTransaction,
       updateTransaction,
+      deleteTransaction,
       updateSettings,
-      resetDemoData
+      clearTransactions,
+      resetDemoData,
+      exportBackup,
+      importBackup
     }),
-    [addTransaction, resetDemoData, settings, transactions, updateSettings, updateTransaction]
+    [
+      addTransaction,
+      categoryState,
+      clearTransactions,
+      deleteTransaction,
+      exportBackup,
+      importBackup,
+      resetDemoData,
+      settings,
+      transactions,
+      updateSettings,
+      updateTransaction
+    ]
   );
 
   return <BookkeepingContext.Provider value={value}>{children}</BookkeepingContext.Provider>;

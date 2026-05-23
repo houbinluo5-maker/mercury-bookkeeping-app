@@ -32,7 +32,9 @@ export default function DashboardPage() {
             </Link>
           </>
         }
-        eyebrow={`${settings.company_name} - ${settings.tax_year}`}
+        eyebrow={`${settings.company_name} - ${settings.tax_year} - ${
+          settings.business_type_tax_notes || settings.entity_type
+        }`}
         title="Dashboard"
       />
 

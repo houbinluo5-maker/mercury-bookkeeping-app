@@ -15,6 +15,7 @@ import {
   WalletCards
 } from "lucide-react";
 import { clsx } from "clsx";
+import { useBookkeeping } from "@/lib/storage";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -35,6 +36,7 @@ function isActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { settings } = useBookkeeping();
 
   if (pathname === "/login") {
     return <main className="min-h-screen bg-paper">{children}</main>;
@@ -47,9 +49,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-ink text-white">
             <WalletCards aria-hidden="true" className="h-5 w-5" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-ink">Mercury Books</p>
-            <p className="text-xs text-slate-500">US LLC ecommerce</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-ink">{settings.company_name}</p>
+            <p className="truncate text-xs text-slate-500">
+              {settings.business_type_tax_notes || settings.entity_type}
+            </p>
           </div>
         </div>
         <div className="flex h-[calc(100vh-5rem)] flex-col justify-between">
