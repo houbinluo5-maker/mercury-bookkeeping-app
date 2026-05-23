@@ -14,6 +14,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 
 - Dashboard with revenue, COGS, expenses, net income, reconciliation, receipt, owner draw, and transfer metrics
 - Add Transaction form with bookkeeping rule classification
+- Natural language transaction entry with confirmation preview before saving
 - Transactions List with search, category filter, status badges, and Excel export
 - Categories / Chart of Accounts
 - Receipts tracker with inline receipt link updates
@@ -25,9 +26,9 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 
 ## Accounting Rules
 
-The MVP applies these local rules in `lib/accounting-rules.ts`:
+The MVP applies these local rules in `lib/accounting-rules.ts` and the natural language parser in `lib/natural-language-parser.ts`:
 
-- Meta Ads / Facebook Ads / TikTok Ads -> Advertising Expense
+- Meta Ads / Facebook Ads / Instagram Ads / TikTok Ads -> Advertising Expense
 - Shopify payout -> Revenue, marked as needs reconciliation
 - Supplier payment -> Product Cost / COGS
 - Shipping payment -> Shipping / Fulfillment
@@ -37,6 +38,22 @@ The MVP applies these local rules in `lib/accounting-rules.ts`:
 - Mercury transfer to owner personal account -> Owner Draw / Member Distribution
 - Mercury transfer to personal IBKR account -> Owner Draw, not business expense
 - Mercury transfer to company brokerage account -> Investment Transfer
+
+## Natural Language Entry
+
+The Add Transaction page includes a sentence input for quick manual entry. The parser converts plain English into an editable transaction draft, then shows a confirmation preview with parser confidence before the transaction can be saved.
+
+Supported examples:
+
+- `Today Meta ads spent 400 dollars`
+- `Today Facebook ads spent 400`
+- `Shopify payout received 1260 today`
+- `Paid supplier 850 for inventory`
+- `Paid 120 for Shopify apps`
+- `Transferred 500 from Mercury to owner personal account`
+- `Owner contributed 2000 to the company`
+
+The parser extracts date, amount, currency, direction, vendor, source, description, category, tax line, receipt requirement, reconciliation status, and notes. Low-confidence parses are clearly marked `Needs review`, and users can edit every parsed field before saving.
 
 ## Getting Started
 
