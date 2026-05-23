@@ -12,6 +12,7 @@ import {
   PlusCircle,
   ReceiptText,
   Settings,
+  Upload,
   WalletCards
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/transactions/new", labelKey: "addTransaction", icon: PlusCircle },
   { href: "/transactions", labelKey: "transactions", icon: ListChecks },
+  { href: "/imports/mercury", labelKey: "importMercuryCsv", icon: Upload },
   { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
   { href: "/receipts", labelKey: "receipts", icon: ReceiptText },
   { href: "/reports/monthly", labelKey: "monthlyReport", icon: BarChart3 },
