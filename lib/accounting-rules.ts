@@ -68,6 +68,10 @@ export function classifyTransaction(
     return result("Software Expense", "Shopify subscription and apps are software expense.");
   }
 
+  if (/payment processing|processing fee|processor fee|merchant fee|card processing|stripe|paypal|shopify payments/.test(text)) {
+    return result("Payment Processing Fees", "Payment processor fees are deductible expenses.");
+  }
+
   if (/wise|wire fee|bank fee|mercury fee|service charge|ach fee|international fee/.test(text)) {
     return result("Bank Fees", "Bank, wire, and payment transfer fees are bank fees.");
   }

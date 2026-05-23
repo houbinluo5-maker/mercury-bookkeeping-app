@@ -1,4 +1,8 @@
 import { categories as seedCategories, defaultSettings } from "@/lib/seed-data";
+import {
+  getReceiptRequiredDefault,
+  normalizeCategoryReceiptDefault
+} from "@/lib/receipt-requirements";
 import type { AppSettings, Category, LocalBackup, Transaction } from "@/lib/types";
 
 type SupabaseConfig = {
@@ -61,6 +65,7 @@ function normalizeSettings(settings: Partial<AppSettings> | null | undefined): A
 
 function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
   const createdAt = transaction.created_at || new Date().toISOString();
+  const category = String(transaction.category ?? "Uncategorized");
 
   return {
     id: String(transaction.id ?? `txn-${Date.now()}`),
@@ -72,9 +77,12 @@ function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
     currency: String(transaction.currency ?? "USD"),
     money_in: Number(transaction.money_in ?? 0),
     money_out: Number(transaction.money_out ?? 0),
-    category: String(transaction.category ?? "Uncategorized"),
+    category,
     tax_line: String(transaction.tax_line ?? "Needs review"),
-    receipt_required: Boolean(transaction.receipt_required ?? true),
+    receipt_required:
+      typeof transaction.receipt_required === "boolean"
+        ? transaction.receipt_required
+        : getReceiptRequiredDefault(category),
     receipt_link: String(transaction.receipt_link ?? ""),
     reconciled: Boolean(transaction.reconciled ?? false),
     notes: String(transaction.notes ?? ""),
@@ -84,14 +92,28 @@ function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
 }
 
 function normalizeCategory(category: Partial<Category>): Category {
-  return {
+  return normalizeCategoryReceiptDefault({
     id: String(category.id ?? ""),
     name: String(category.name ?? ""),
     type: category.type ?? "Expense",
     tax_line: String(category.tax_line ?? "Needs review"),
     receipt_required_default: Boolean(category.receipt_required_default ?? true),
     description: String(category.description ?? "")
-  };
+  });
+}
+
+function normalizeCategories(categories: Partial<Category>[] | null | undefined): Category[] {
+  const normalized = Array.isArray(categories)
+    ? categories.map((category) => normalizeCategory(category))
+    : [];
+  const categoryByName = new Map(normalized.map((category) => [category.name, category]));
+  const seedCategoryNames = new Set(seedCategories.map((category) => category.name));
+  const mergedKnownCategories = seedCategories.map((category) =>
+    normalizeCategoryReceiptDefault(categoryByName.get(category.name) ?? category)
+  );
+  const customCategories = normalized.filter((category) => !seedCategoryNames.has(category.name));
+
+  return [...mergedKnownCategories, ...customCategories];
 }
 
 function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
@@ -103,9 +125,7 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
     exported_at: backup.exported_at || new Date().toISOString(),
     version: 1,
     transactions,
-    categories: Array.isArray(backup.categories)
-      ? backup.categories.map((category) => normalizeCategory(category))
-      : seedCategories,
+    categories: normalizeCategories(backup.categories),
     receipts: Array.isArray(backup.receipts)
       ? backup.receipts
       : transactions.map((transaction) => ({
@@ -308,7 +328,7 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
     exported_at: new Date().toISOString(),
     version: 1,
     transactions,
-    categories: categoryRows.length ? categoryRows.map((category) => normalizeCategory(category)) : seedCategories,
+    categories: normalizeCategories(categoryRows.length ? categoryRows : seedCategories),
     receipts: receiptRows,
     settings: fromSettingsRow(settingsRows[0])
   };

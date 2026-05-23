@@ -224,6 +224,7 @@ function inferSource(text: string, category: string) {
   if (/shipping|shipbob|shipstation|ups|fedex|usps|dhl/.test(normalized)) return "Shipping";
   if (/domain|hosting|namecheap|email|software|subscription|app/.test(normalized)) return "Software";
   if (/owner|personal|member distribution/.test(normalized)) return "Owner";
+  if (category === "Payment Processing Fees") return "Payment Processor";
   if (category === "Bank Fees") return "Mercury";
 
   return "Mercury";
