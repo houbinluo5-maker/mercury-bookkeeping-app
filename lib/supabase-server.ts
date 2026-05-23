@@ -25,6 +25,13 @@ type ReceiptRow = {
   reconciled: boolean;
 };
 
+type SupabaseErrorBody = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
 function normalizeSupabaseUrl(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -149,11 +156,50 @@ function toReceiptRows(transactions: Transaction[]): ReceiptRow[] {
   }));
 }
 
+function parseSupabaseBody(text: string): unknown {
+  if (!text.trim()) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function describeSupabaseError(status: number, statusText: string, body: unknown) {
+  const errorBody = typeof body === "object" && body !== null ? (body as SupabaseErrorBody) : null;
+  const message = errorBody?.message || (typeof body === "string" ? body : "");
+  const code = errorBody?.code || "";
+  const details = errorBody?.details || "";
+  const hint = errorBody?.hint || "";
+  const combined = [code, message, details, hint].join(" ").toLowerCase();
+  const suffix = [message, details, hint].filter(Boolean).join(" ");
+
+  if (code === "42501" || /permission denied|row-level security|rls/.test(combined)) {
+    return `Supabase permission denied. Confirm the app is using the service role key and that the SQL migration was run. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  if (status === 401 || /invalid.*api|api key|jwt|token|signature/.test(combined)) {
+    return `Supabase rejected the service role key. Check SUPABASE_SERVICE_ROLE_KEY in the deployment environment. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  if (code === "42P01" || /relation .* does not exist|does not exist|schema cache/.test(combined)) {
+    return `Supabase table is missing. Run supabase/migrations/202605230001_bookkeeping_schema.sql in the Supabase SQL editor. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  if (!message && !details && !hint) {
+    return `Supabase returned an empty error response. HTTP ${status} ${statusText}.`;
+  }
+
+  return `Supabase request failed. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+}
+
 async function supabaseRequest<T>(
   config: SupabaseConfig,
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
+  const method = init.method?.toUpperCase() ?? "GET";
   const response = await fetch(`${config.url}/rest/v1/${path}`, {
     ...init,
     cache: "no-store",
@@ -164,17 +210,34 @@ async function supabaseRequest<T>(
       ...(init.headers ?? {})
     }
   });
+  const responseText = await response.text();
+  const responseBody = parseSupabaseBody(responseText);
 
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Supabase request failed with ${response.status}`);
+    throw new Error(describeSupabaseError(response.status, response.statusText, responseBody));
   }
 
-  if (response.status === 204) {
+  if (!responseText.trim()) {
+    if (method !== "GET" || response.status === 204) {
+      return undefined as T;
+    }
+
+    throw new Error(
+      `Supabase returned an empty successful response for ${path}. HTTP ${response.status} ${response.statusText}.`
+    );
+  }
+
+  if (typeof responseBody === "string") {
+    throw new Error(
+      `Supabase returned non-JSON response for ${path}. HTTP ${response.status} ${response.statusText}. ${responseBody.slice(0, 240)}`
+    );
+  }
+
+  if (responseBody === null) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  return responseBody as T;
 }
 
 async function deleteAllRows(config: SupabaseConfig, table: string, column: string) {

@@ -8,20 +8,36 @@ import {
 import type { LocalBackup } from "@/lib/types";
 
 function unauthorized() {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return NextResponse.json(
+    {
+      apiStatus: 401,
+      apiStatusText: "Unauthorized",
+      configured: false,
+      error: "Unauthorized",
+      mode: "error"
+    },
+    { status: 401 }
+  );
 }
 
 function supabaseNotConfigured() {
-  return NextResponse.json({
-    configured: false,
-    mode: "local",
-    message: "Supabase variables are not configured."
-  });
+  return NextResponse.json(
+    {
+      apiStatus: 200,
+      apiStatusText: "OK",
+      configured: false,
+      mode: "local",
+      message: "Supabase variables are not configured."
+    },
+    { status: 200 }
+  );
 }
 
 function supabaseError(error: unknown) {
   return NextResponse.json(
     {
+      apiStatus: 500,
+      apiStatusText: "Internal Server Error",
       configured: true,
       error: error instanceof Error ? error.message : "Supabase request failed.",
       mode: "error"
@@ -38,6 +54,8 @@ export async function GET(request: NextRequest) {
     const data = await loadSupabaseBackup();
 
     return NextResponse.json({
+      apiStatus: 200,
+      apiStatusText: "OK",
       configured: true,
       data,
       mode: "supabase",
@@ -53,10 +71,28 @@ export async function PUT(request: NextRequest) {
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const backup = (await request.json()) as LocalBackup;
+    let backup: LocalBackup;
+
+    try {
+      backup = (await request.json()) as LocalBackup;
+    } catch {
+      return NextResponse.json(
+        {
+          apiStatus: 400,
+          apiStatusText: "Bad Request",
+          configured: true,
+          error: "Storage API expected a JSON backup payload.",
+          mode: "error"
+        },
+        { status: 400 }
+      );
+    }
+
     const data = await replaceSupabaseBackup(backup);
 
     return NextResponse.json({
+      apiStatus: 200,
+      apiStatusText: "OK",
       configured: true,
       data,
       mode: "supabase",

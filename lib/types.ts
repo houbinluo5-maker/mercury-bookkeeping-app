@@ -60,7 +60,10 @@ export type LocalBackup = {
 export type StorageMode = "checking" | "local" | "supabase" | "error";
 
 export type StorageStatus = {
+  apiStatus?: number;
+  apiStatusText?: string;
   configured: boolean;
+  error?: string;
   mode: StorageMode;
   message: string;
 };

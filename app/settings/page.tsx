@@ -287,6 +287,29 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        <section className="rounded-lg border border-line bg-slate-50 p-4">
+          <dl className="grid gap-3 text-sm md:grid-cols-3">
+            <div>
+              <dt className="form-label">{t("apiStatus")}</dt>
+              <dd className="mt-1 font-medium text-ink">
+                {typeof storageStatus.apiStatus === "number"
+                  ? `${storageStatus.apiStatus} ${storageStatus.apiStatusText || ""}`.trim()
+                  : "-"}
+              </dd>
+            </div>
+            <div>
+              <dt className="form-label">{t("storageMode")}</dt>
+              <dd className="mt-1 font-medium text-ink">{storageStatus.mode}</dd>
+            </div>
+            <div>
+              <dt className="form-label">{t("errorMessage")}</dt>
+              <dd className="mt-1 font-medium text-ink">
+                {storageStatus.error || storageStatus.message || "-"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={storageBusy}
