@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
+import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
@@ -77,6 +77,17 @@ export function ReceiptTable() {
                     {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
                   </p>
                 </div>
+                <div className="mt-3">
+                  <ReceiptUploadControl
+                    compact
+                    onReceiptLinkChange={(receiptLink) =>
+                      updateTransaction(transaction.id, { receipt_link: receiptLink })
+                    }
+                    receiptLink={transaction.receipt_link}
+                    receiptRequired={transaction.receipt_required}
+                    transactionId={transaction.id}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -121,28 +132,25 @@ export function ReceiptTable() {
                     {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
                   </td>
                   <td className="table-cell min-w-80">
-                    <div className="flex items-center gap-2">
+                    <div className="space-y-2">
                       <input
                         className="form-input"
                         onChange={(event) =>
                           updateTransaction(transaction.id, { receipt_link: event.target.value })
                         }
                         placeholder={t("receiptLinkPlaceholder")}
-                        type="url"
+                        type="text"
                         value={transaction.receipt_link}
                       />
-                      {transaction.receipt_link ? (
-                        <a
-                          aria-label={t("openReceipt")}
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-white text-slate-700 hover:bg-slate-50"
-                          href={transaction.receipt_link}
-                          rel="noreferrer"
-                          target="_blank"
-                          title={t("openReceipt")}
-                        >
-                          <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                        </a>
-                      ) : null}
+                      <ReceiptUploadControl
+                        compact
+                        onReceiptLinkChange={(receiptLink) =>
+                          updateTransaction(transaction.id, { receipt_link: receiptLink })
+                        }
+                        receiptLink={transaction.receipt_link}
+                        receiptRequired={transaction.receipt_required}
+                        transactionId={transaction.id}
+                      />
                     </div>
                   </td>
                   <td className="table-cell min-w-48">

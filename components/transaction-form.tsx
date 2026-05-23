@@ -344,7 +344,7 @@ export function TransactionForm() {
             className="form-input"
             onChange={(event) => setField("receipt_link", event.target.value)}
             placeholder={t("receiptLinkPlaceholder")}
-            type="url"
+            type="text"
             value={draft.receipt_link}
           />
         </label>
