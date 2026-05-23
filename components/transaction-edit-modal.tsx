@@ -3,6 +3,7 @@
 import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
+import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { useI18n } from "@/lib/i18n";
 import { accountOptions, sourceOptions } from "@/lib/seed-data";
 import { useBookkeeping } from "@/lib/storage";
@@ -162,16 +163,24 @@ export function TransactionEditModal({
               value={currentTransaction.tax_line}
             />
           </label>
-          <label className="space-y-1 md:col-span-2 xl:col-span-3">
-            <span className="form-label">{t("receiptLink")}</span>
-            <input
-              className="form-input"
-              onChange={(event) => setField("receipt_link", event.target.value)}
-              placeholder={t("receiptLinkPlaceholder")}
-              type="url"
-              value={currentTransaction.receipt_link}
+          <div className="space-y-3 md:col-span-2 xl:col-span-3">
+            <label className="block space-y-1">
+              <span className="form-label">{t("receiptLink")}</span>
+              <input
+                className="form-input"
+                onChange={(event) => setField("receipt_link", event.target.value)}
+                placeholder={t("receiptLinkPlaceholder")}
+                type="text"
+                value={currentTransaction.receipt_link}
+              />
+            </label>
+            <ReceiptUploadControl
+              onReceiptLinkChange={(receiptLink) => setField("receipt_link", receiptLink)}
+              receiptLink={currentTransaction.receipt_link}
+              receiptRequired={currentTransaction.receipt_required}
+              transactionId={currentTransaction.id}
             />
-          </label>
+          </div>
           <div className="grid grid-cols-2 gap-3 pt-6">
             <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
               <input

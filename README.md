@@ -8,7 +8,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - TypeScript
 - Tailwind CSS
 - Simple admin-password cookie auth for MVP private access
-- Supabase PostgreSQL persistence through protected server-side API routes
+- Supabase PostgreSQL persistence and receipt file storage through protected server-side API routes
 - Browser-side Excel-compatible `.xls` export
 - Local seed data in `lib/seed-data.ts`
 
@@ -20,7 +20,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Transactions List with search, category filter, status badges, and Excel export
 - Mercury bank CSV import with browser-side parsing, duplicate detection, category preview, and Supabase/localStorage save
 - Categories / Chart of Accounts
-- Receipts tracker with inline receipt link updates
+- Receipts tracker with inline receipt link updates and Supabase Storage receipt uploads
 - Monthly Report
 - Quarterly Report
 - Annual Tax Summary grouped by tax line and category
@@ -137,6 +137,8 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ```
 
+Receipt file upload also uses these server-only Supabase variables. Do not expose the service role key to browser code or any `NEXT_PUBLIC_*` variable.
+
 If `ADMIN_PASSWORD` is missing, the login page shows a setup warning in development and protected pages redirect to `/login`.
 
 ```bash
@@ -240,6 +242,26 @@ The migration creates:
 
 RLS is enabled without public policies. The app reads and writes through protected server-side API routes using the service role key.
 
+### Create The Receipts Storage Bucket
+
+Receipt uploads use Supabase Storage through protected server-side API routes. Create a private bucket named:
+
+```text
+receipts
+```
+
+Recommended bucket settings:
+
+- Public bucket: `Off` / private
+- File size limit: `10 MB`
+- Allowed MIME types:
+  - `application/pdf`
+  - `image/png`
+  - `image/jpeg`
+  - `image/webp`
+
+You can create this in the Supabase Dashboard under Storage -> New bucket. Keep the bucket private; the app downloads uploaded receipts through `/api/receipts/file`, which checks the existing admin session and uses the server-only service role key.
+
 ### Vercel Environment Variables
 
 In Vercel, add these variables for the deployed app:
@@ -317,10 +339,21 @@ Dashboard totals, monthly reports, quarterly reports, annual tax summary, receip
 
 ## Receipt Links And Reconciliation
 
-Use the Receipts page to add or update receipt links. Good support documents include Meta invoices, Shopify invoices, supplier invoices, shipping bills, domain or hosting invoices, bank statements, and payment confirmations.
+Use the Receipts page, the missing receipts section, or the Transactions edit modal to upload receipt files or add external private receipt links. Good support documents include Meta invoices, Shopify invoices, supplier invoices, shipping bills, domain or hosting invoices, bank statements, and payment confirmations.
+
+Uploaded files are stored in the private Supabase Storage bucket named `receipts`. The app stores the uploaded object path in `transaction.receipt_link`, for example `transactions/{transactionId}/{fileName}`. Manual external links can still be stored in the same field.
+
+Supported upload types:
+
+- PDF
+- PNG
+- JPG / JPEG
+- WebP
+
+Uploads are limited to `10 MB`. Replacing an uploaded receipt stores the new file and deletes the previous app-managed object from Supabase Storage. Deleting a receipt removes app-managed uploaded files from Storage and clears `transaction.receipt_link`; manual external links are only unlinked from the transaction.
 
 - `Receipt missing`: the transaction requires a receipt, but `receipt_link` is empty.
-- `Receipt linked`: a receipt URL is present.
+- `Receipt linked`: a receipt URL or uploaded receipt path is present.
 - `Needs reconciliation`: the transaction is not marked reconciled yet, commonly used for Shopify payouts or ad invoices that need matching against source reports.
 - `Reconciled`: the transaction has been reviewed against its source documentation.
 
