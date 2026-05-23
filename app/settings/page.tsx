@@ -7,6 +7,7 @@ import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
 import { accountOptions, defaultSettings } from "@/lib/seed-data";
 import { downloadExcel } from "@/lib/export-excel";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 import type { AppSettings, LocalBackup } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   const [clearModalOpen, setClearModalOpen] = useState(false);
   const [importStatus, setImportStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDraft(settings), 0);
@@ -46,14 +48,14 @@ export default function SettingsPage() {
   function confirmClearTransactions() {
     clearTransactions();
     setClearModalOpen(false);
-    setImportStatus("All local transactions were cleared.");
+    setImportStatus(t("clearedTransactions"));
   }
 
   function reset() {
-    if (window.confirm("Reset all local data back to the demo seed data?")) {
+    if (window.confirm(t("resetDemoDataQuestion"))) {
       resetDemoData();
       setDraft(defaultSettings);
-      setImportStatus("Demo seed data restored.");
+      setImportStatus(t("restoredDemoData"));
     }
   }
 
@@ -80,12 +82,16 @@ export default function SettingsPage() {
     try {
       const backup = JSON.parse(await file.text()) as LocalBackup;
       if (!Array.isArray(backup.transactions) || !backup.settings) {
-        throw new Error("Backup is missing transactions or settings.");
+        throw new Error(t("backupMissingFields"));
       }
       importBackup(backup);
-      setImportStatus(`Restored backup from ${file.name}.`);
+      setImportStatus(`${t("restoredBackupPrefix")} ${file.name}.`);
     } catch (error) {
-      setImportStatus(error instanceof Error ? error.message : "Could not restore backup.");
+      setImportStatus(
+        error instanceof Error && error.message === t("backupMissingFields")
+          ? error.message
+          : t("couldNotRestoreBackup")
+      );
     } finally {
       event.target.value = "";
     }
@@ -98,136 +104,142 @@ export default function SettingsPage() {
           <>
             <Button onClick={downloadBackupJson}>
               <FileJson aria-hidden="true" className="h-4 w-4" />
-              Backup JSON
+              {t("backupJson")}
             </Button>
             <Button onClick={() => downloadExcel(transactions, "bookkeeping-full-export.xls")}>
               <Download aria-hidden="true" className="h-4 w-4" />
-              Export Excel
+              {t("exportExcel")}
             </Button>
           </>
         }
-        eyebrow="Local MVP"
-        title="Settings"
+        eyebrow={t("localMvp")}
+        title={t("settings")}
       />
 
       <form className="space-y-6" onSubmit={submit}>
         <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
           <div>
-            <h2 className="text-lg font-semibold tracking-normal text-ink">Company Settings</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              These values appear in the sidebar, dashboard, reports, and future exports.
-            </p>
+            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("companySettings")}</h2>
+            <p className="mt-1 text-sm text-slate-600">{t("companySettingsHelp")}</p>
           </div>
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <label className="space-y-1">
-            <span className="form-label">Company Name</span>
-            <input
-              className="form-input"
-              onChange={(event) => setField("company_name", event.target.value)}
-              value={draft.company_name}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="form-label">Business Type</span>
-            <input
-              className="form-input"
-              onChange={(event) => setField("entity_type", event.target.value)}
-              value={draft.entity_type}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="form-label">Tax Year</span>
-            <input
-              className="form-input"
-              min="2020"
-              onChange={(event) => setField("tax_year", Number(event.target.value))}
-              type="number"
-              value={draft.tax_year}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="form-label">Default Currency</span>
-            <input
-              className="form-input"
-              onChange={(event) => setField("default_currency", event.target.value.toUpperCase())}
-              value={draft.default_currency}
-            />
-          </label>
-          <label className="space-y-1">
-            <span className="form-label">Default Account Name</span>
-            <input
-              className="form-input"
-              list="settings-account-options"
-              onChange={(event) => setField("default_account", event.target.value)}
-              value={draft.default_account}
-            />
-            <datalist id="settings-account-options">
-              {accountOptions.map((account) => (
-                <option key={account} value={account} />
-              ))}
-            </datalist>
-          </label>
-          <label className="space-y-1">
-            <span className="form-label">Bookkeeping Method</span>
-            <select
-              className="form-input"
-              onChange={(event) =>
-                setField("bookkeeping_method", event.target.value as AppSettings["bookkeeping_method"])
-              }
-              value={draft.bookkeeping_method}
-            >
-              <option value="cash">Cash</option>
-              <option value="accrual">Accrual</option>
-            </select>
-          </label>
-          <label className="space-y-1 md:col-span-2">
-            <span className="form-label">Business Type / Tax Notes</span>
-            <textarea
-              className="form-textarea"
-              onChange={(event) => setField("business_type_tax_notes", event.target.value)}
-              value={draft.business_type_tax_notes}
-            />
-          </label>
-        </section>
+          <section className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-1">
+              <span className="form-label">{t("language")}</span>
+              <select
+                className="form-input"
+                onChange={(event) => setField("language", event.target.value as AppSettings["language"])}
+                value={draft.language}
+              >
+                <option value="en">{t("english")}</option>
+                <option value="zh">{t("simplifiedChinese")}</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("companyName")}</span>
+              <input
+                className="form-input"
+                onChange={(event) => setField("company_name", event.target.value)}
+                value={draft.company_name}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("businessType")}</span>
+              <input
+                className="form-input"
+                onChange={(event) => setField("entity_type", event.target.value)}
+                value={draft.entity_type}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("taxYear")}</span>
+              <input
+                className="form-input"
+                min="2020"
+                onChange={(event) => setField("tax_year", Number(event.target.value))}
+                type="number"
+                value={draft.tax_year}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("defaultCurrency")}</span>
+              <input
+                className="form-input"
+                onChange={(event) => setField("default_currency", event.target.value.toUpperCase())}
+                value={draft.default_currency}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("defaultAccountName")}</span>
+              <input
+                className="form-input"
+                list="settings-account-options"
+                onChange={(event) => setField("default_account", event.target.value)}
+                value={draft.default_account}
+              />
+              <datalist id="settings-account-options">
+                {accountOptions.map((account) => (
+                  <option key={account} value={account} />
+                ))}
+              </datalist>
+            </label>
+            <label className="space-y-1">
+              <span className="form-label">{t("bookkeepingMethod")}</span>
+              <select
+                className="form-input"
+                onChange={(event) =>
+                  setField("bookkeeping_method", event.target.value as AppSettings["bookkeeping_method"])
+                }
+                value={draft.bookkeeping_method}
+              >
+                <option value="cash">{t("cash")}</option>
+                <option value="accrual">{t("accrual")}</option>
+              </select>
+            </label>
+            <label className="space-y-1 md:col-span-2">
+              <span className="form-label">{t("businessTypeTaxNotes")}</span>
+              <textarea
+                className="form-textarea"
+                onChange={(event) => setField("business_type_tax_notes", event.target.value)}
+                value={draft.business_type_tax_notes}
+              />
+            </label>
+          </section>
 
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="primary">
               <Save aria-hidden="true" className="h-4 w-4" />
-              Save settings
+              {t("saveSettings")}
             </Button>
-            {saved ? <Badge tone="green">Saved</Badge> : null}
+            {saved ? <Badge tone="green">{t("saved")}</Badge> : null}
           </div>
         </section>
       </form>
 
       <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
         <div>
-          <h2 className="text-lg font-semibold tracking-normal text-ink">Data Management</h2>
+          <h2 className="text-lg font-semibold tracking-normal text-ink">{t("dataManagement")}</h2>
           <div className="mt-3 flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              This MVP stores bookkeeping data in this browser&apos;s localStorage. Back up your data
-              regularly, especially before clearing browser data, changing devices, or deploying changes.
-            </p>
+            <p>{t("dataManagementWarning")}</p>
           </div>
         </div>
 
         <section className="grid gap-4 md:grid-cols-3">
           <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
-            <p className="form-label">Data Source</p>
+            <p className="form-label">{t("dataSource")}</p>
             <div className="mt-3">
-              <Badge tone="blue">Seed data + localStorage</Badge>
+              <Badge tone="blue">{t("seedDataLocalStorage")}</Badge>
             </div>
           </div>
           <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
-            <p className="form-label">Transactions</p>
+            <p className="form-label">{t("transactions")}</p>
             <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
           </div>
           <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
-            <p className="form-label">Integrations</p>
+            <p className="form-label">{t("integrations")}</p>
             <div className="mt-3">
-              <Badge tone="neutral">Not connected</Badge>
+              <Badge tone="neutral">{t("notConnected")}</Badge>
             </div>
           </div>
         </section>
@@ -235,11 +247,11 @@ export default function SettingsPage() {
         <div className="flex flex-wrap gap-2">
           <Button onClick={downloadBackupJson}>
             <FileJson aria-hidden="true" className="h-4 w-4" />
-            Download backup
+            {t("downloadBackup")}
           </Button>
           <Button onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
-            Restore backup
+            {t("restoreBackup")}
           </Button>
           <input
             accept="application/json,.json"
@@ -250,11 +262,11 @@ export default function SettingsPage() {
           />
           <Button onClick={() => setClearModalOpen(true)} variant="danger">
             <Trash2 aria-hidden="true" className="h-4 w-4" />
-            Clear transactions
+            {t("clearTransactions")}
           </Button>
           <Button onClick={reset}>
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
-            Reset demo seed data
+            {t("resetDemoSeedData")}
           </Button>
           {importStatus ? <Badge tone="blue">{importStatus}</Badge> : null}
         </div>
@@ -268,18 +280,14 @@ export default function SettingsPage() {
                 <Database aria-hidden="true" className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-ink">Clear all transactions?</h2>
-                <p className="mt-2 text-sm text-slate-600">
-                  This removes every transaction currently stored in localStorage, including demo/sample
-                  seed transactions and any manual entries in this browser. Download a backup first if you
-                  need to keep a copy.
-                </p>
+                <h2 className="text-lg font-semibold text-ink">{t("clearAllTransactionsQuestion")}</h2>
+                <p className="mt-2 text-sm text-slate-600">{t("clearTransactionsBody")}</p>
               </div>
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button onClick={() => setClearModalOpen(false)}>Cancel</Button>
+              <Button onClick={() => setClearModalOpen(false)}>{t("cancel")}</Button>
               <Button onClick={confirmClearTransactions} variant="danger">
-                Clear transactions
+                {t("clearTransactions")}
               </Button>
             </div>
           </div>

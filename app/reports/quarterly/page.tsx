@@ -17,6 +17,7 @@ import {
   summarizeTransactions
 } from "@/lib/calculations";
 import { downloadExcel } from "@/lib/export-excel";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transactions"]) {
@@ -29,6 +30,7 @@ function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transacti
 
 export default function QuarterlyReportPage() {
   const { transactions } = useBookkeeping();
+  const { t } = useI18n();
   const initial = latestPeriod(transactions);
   const [year, setYear] = useState(initial.year);
   const [quarter, setQuarter] = useState(initial.quarter);
@@ -49,17 +51,17 @@ export default function QuarterlyReportPage() {
             <QuarterSelect onChange={setQuarter} value={quarter} />
             <Button onClick={() => downloadExcel(reportTransactions, `${year}-q${quarter}-report.xls`)}>
               <Download aria-hidden="true" className="h-4 w-4" />
-              Export
+              {t("export")}
             </Button>
           </>
         }
         eyebrow={`Q${quarter} ${year}`}
-        title="Quarterly Report"
+        title={t("quarterlyReport")}
       />
       <ReportSummary summary={summary} />
       <ReportTable rows={rows} />
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-normal text-ink">Transactions</h2>
+        <h2 className="text-lg font-semibold tracking-normal text-ink">{t("reportsTransactions")}</h2>
         <TransactionsTable compact transactions={reportTransactions} />
       </section>
     </div>

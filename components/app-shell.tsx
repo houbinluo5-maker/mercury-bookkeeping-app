@@ -16,17 +16,18 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useBookkeeping } from "@/lib/storage";
+import { useI18n } from "@/lib/i18n";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/transactions/new", label: "Add Transaction", icon: PlusCircle },
-  { href: "/transactions", label: "Transactions", icon: ListChecks },
-  { href: "/accounts", label: "Chart of Accounts", icon: Building2 },
-  { href: "/receipts", label: "Receipts", icon: ReceiptText },
-  { href: "/reports/monthly", label: "Monthly Report", icon: BarChart3 },
-  { href: "/reports/quarterly", label: "Quarterly Report", icon: WalletCards },
-  { href: "/reports/annual-tax-summary", label: "Annual Tax Summary", icon: FileSpreadsheet },
-  { href: "/settings", label: "Settings", icon: Settings }
+  { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/transactions/new", labelKey: "addTransaction", icon: PlusCircle },
+  { href: "/transactions", labelKey: "transactions", icon: ListChecks },
+  { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
+  { href: "/receipts", labelKey: "receipts", icon: ReceiptText },
+  { href: "/reports/monthly", labelKey: "monthlyReport", icon: BarChart3 },
+  { href: "/reports/quarterly", labelKey: "quarterlyReport", icon: WalletCards },
+  { href: "/reports/annual-tax-summary", labelKey: "annualTaxSummary", icon: FileSpreadsheet },
+  { href: "/settings", labelKey: "settings", icon: Settings }
 ];
 
 function isActive(pathname: string, href: string) {
@@ -37,6 +38,7 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { settings } = useBookkeeping();
+  const { t } = useI18n();
 
   if (pathname === "/login") {
     return <main className="min-h-screen bg-paper">{children}</main>;
@@ -74,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   key={item.href}
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </Link>
               );
             })}
@@ -85,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               type="submit"
             >
               <LogOut aria-hidden="true" className="h-4 w-4" />
-              <span>Logout</span>
+              <span>{t("logout")}</span>
             </button>
           </form>
         </div>
@@ -100,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
               return (
                 <Link
-                  aria-label={item.label}
+                  aria-label={t(item.labelKey)}
                   className={clsx(
                     "flex h-10 min-w-10 items-center justify-center rounded-md border px-3 text-sm transition",
                     active
@@ -109,22 +111,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   )}
                   href={item.href}
                   key={item.href}
-                  title={item.label}
+                  title={t(item.labelKey)}
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
-                  <span className="ml-2 hidden sm:inline">{item.label}</span>
+                  <span className="ml-2 hidden sm:inline">{t(item.labelKey)}</span>
                 </Link>
               );
             })}
             <form action="/api/auth/logout" method="post">
               <button
-                aria-label="Logout"
+                aria-label={t("logout")}
                 className="flex h-10 min-w-10 items-center justify-center rounded-md border border-line bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50"
-                title="Logout"
+                title={t("logout")}
                 type="submit"
               >
                 <LogOut aria-hidden="true" className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">Logout</span>
+                <span className="ml-2 hidden sm:inline">{t("logout")}</span>
               </button>
             </form>
           </div>

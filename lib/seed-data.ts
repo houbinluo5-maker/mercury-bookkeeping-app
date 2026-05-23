@@ -119,7 +119,8 @@ export const defaultSettings: AppSettings = {
   default_currency: "USD",
   default_account: "Mercury Checking",
   bookkeeping_method: "cash",
-  business_type_tax_notes: "US LLC ecommerce business using cash-basis bookkeeping."
+  business_type_tax_notes: "US LLC ecommerce business using cash-basis bookkeeping.",
+  language: "en"
 };
 
 export const seedTransactions: Transaction[] = [

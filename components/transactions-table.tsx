@@ -8,6 +8,7 @@ import { Button, buttonClassName } from "@/components/button";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
 import { downloadExcel } from "@/lib/export-excel";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
 
@@ -19,6 +20,7 @@ export function TransactionsTable({
   compact?: boolean;
 }) {
   const { categories } = useBookkeeping();
+  const { categoryLabel, t, taxLineLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [status, setStatus] = useState("All");
@@ -31,9 +33,9 @@ export function TransactionsTable({
       const categoryMatch = category === "All" || transaction.category === category;
       const statusMatch =
         status === "All" ||
-        (status === "Receipt missing" && transaction.receipt_required && !transaction.receipt_link) ||
-        (status === "Needs reconciliation" && !transaction.reconciled) ||
-        (status === "Reconciled" && transaction.reconciled);
+        (status === "receiptMissing" && transaction.receipt_required && !transaction.receipt_link) ||
+        (status === "needsReconciliation" && !transaction.reconciled) ||
+        (status === "reconciled" && transaction.reconciled);
       const queryMatch =
         !normalized ||
         [
@@ -61,14 +63,14 @@ export function TransactionsTable({
     return (
       <div className="flex flex-wrap gap-2">
         <Badge tone={transaction.reconciled ? "green" : "amber"}>
-          {transaction.reconciled ? "Reconciled" : "Needs reconciliation"}
+          {transaction.reconciled ? t("reconciled") : t("needsReconciliation")}
         </Badge>
         {transaction.receipt_required ? (
           <Badge tone={transaction.receipt_link ? "green" : "red"}>
-            {transaction.receipt_link ? "Receipt linked" : "Receipt missing"}
+            {transaction.receipt_link ? t("receiptLinked") : t("receiptMissing")}
           </Badge>
         ) : (
-          <Badge tone="neutral">Receipt optional</Badge>
+          <Badge tone="neutral">{t("receiptOptional")}</Badge>
         )}
       </div>
     );
@@ -87,7 +89,7 @@ export function TransactionsTable({
               <input
                 className="form-input pl-9"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search transactions"
+                placeholder={t("searchTransactions")}
                 value={query}
               />
             </label>
@@ -96,10 +98,10 @@ export function TransactionsTable({
               onChange={(event) => setCategory(event.target.value)}
               value={category}
             >
-              <option value="All">All categories</option>
+              <option value="All">{t("allCategories")}</option>
               {categories.map((item) => (
                 <option key={item.id} value={item.name}>
-                  {item.name}
+                  {categoryLabel(item.name)}
                 </option>
               ))}
             </select>
@@ -108,20 +110,20 @@ export function TransactionsTable({
               onChange={(event) => setStatus(event.target.value)}
               value={status}
             >
-              <option value="All">All statuses</option>
-              <option value="Receipt missing">Receipt missing</option>
-              <option value="Needs reconciliation">Needs reconciliation</option>
-              <option value="Reconciled">Reconciled</option>
+              <option value="All">{t("allStatuses")}</option>
+              <option value="receiptMissing">{t("receiptMissing")}</option>
+              <option value="needsReconciliation">{t("needsReconciliation")}</option>
+              <option value="reconciled">{t("reconciled")}</option>
             </select>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => downloadExcel(filtered, "bookkeeping-transactions.xls")}>
               <Download aria-hidden="true" className="h-4 w-4" />
-              Export
+              {t("export")}
             </Button>
             <Link className={buttonClassName("primary")} href="/transactions/new">
               <PlusCircle aria-hidden="true" className="h-4 w-4" />
-              Add
+              {t("add")}
             </Link>
           </div>
         </div>
@@ -134,19 +136,19 @@ export function TransactionsTable({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-ink">
-                    {transaction.vendor || "Manual entry"}
+                    {transaction.vendor || t("manualEntry")}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">{formatDate(transaction.date)}</p>
                 </div>
                 <Button className="h-9 px-2" onClick={() => setEditingTransactionId(transaction.id)}>
                   <Edit3 aria-hidden="true" className="h-4 w-4" />
-                  Edit
+                  {t("edit")}
                 </Button>
               </div>
               <p className="mt-3 text-sm text-slate-700">{transaction.description}</p>
               <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="form-label">Money In</p>
+                  <p className="form-label">{t("moneyIn")}</p>
                   <p className="font-semibold text-mint">
                     {transaction.money_in
                       ? formatCurrency(transaction.money_in, transaction.currency)
@@ -154,7 +156,7 @@ export function TransactionsTable({
                   </p>
                 </div>
                 <div>
-                  <p className="form-label">Money Out</p>
+                  <p className="form-label">{t("moneyOut")}</p>
                   <p className="font-semibold text-coral">
                     {transaction.money_out
                       ? formatCurrency(transaction.money_out, transaction.currency)
@@ -163,8 +165,8 @@ export function TransactionsTable({
                 </div>
               </div>
               <div className="mt-3">
-                <p className="text-sm font-medium text-slate-800">{transaction.category}</p>
-                <p className="text-xs text-slate-500">{transaction.tax_line}</p>
+                <p className="text-sm font-medium text-slate-800">{categoryLabel(transaction.category)}</p>
+                <p className="text-xs text-slate-500">{taxLineLabel(transaction.tax_line)}</p>
               </div>
               <div className="mt-3">
                 <StatusBadges transaction={transaction} />
@@ -173,7 +175,7 @@ export function TransactionsTable({
           ))}
           {filtered.length === 0 ? (
             <div className="rounded-lg border border-line bg-white px-3 py-8 text-center text-sm text-slate-500">
-              No transactions found.
+              {t("emptyTransactions")}
             </div>
           ) : null}
         </div>
@@ -184,14 +186,14 @@ export function TransactionsTable({
           <table className="min-w-full border-collapse">
             <thead className="table-head">
               <tr>
-                <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">Transaction</th>
-                <th className="px-3 py-3">Source</th>
-                <th className="px-3 py-3">Category</th>
-                <th className="px-3 py-3 text-right">Money In</th>
-                <th className="px-3 py-3 text-right">Money Out</th>
-                {!compact ? <th className="px-3 py-3">Status</th> : null}
-                {!compact ? <th className="px-3 py-3 text-right">Action</th> : null}
+                <th className="px-3 py-3">{t("date")}</th>
+                <th className="px-3 py-3">{t("transaction")}</th>
+                <th className="px-3 py-3">{t("source")}</th>
+                <th className="px-3 py-3">{t("category")}</th>
+                <th className="px-3 py-3 text-right">{t("moneyIn")}</th>
+                <th className="px-3 py-3 text-right">{t("moneyOut")}</th>
+                {!compact ? <th className="px-3 py-3">{t("status")}</th> : null}
+                {!compact ? <th className="px-3 py-3 text-right">{t("action")}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -199,13 +201,13 @@ export function TransactionsTable({
                 <tr className="hover:bg-slate-50" key={transaction.id}>
                   <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
                   <td className="table-cell min-w-56">
-                    <p className="font-medium text-ink">{transaction.vendor || "Manual entry"}</p>
+                    <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>
                     <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
                   </td>
                   <td className="table-cell whitespace-nowrap">{transaction.source}</td>
                   <td className="table-cell min-w-52">
-                    <p className="font-medium text-slate-800">{transaction.category}</p>
-                    <p className="mt-1 text-xs text-slate-500">{transaction.tax_line}</p>
+                    <p className="font-medium text-slate-800">{categoryLabel(transaction.category)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{taxLineLabel(transaction.tax_line)}</p>
                   </td>
                   <td className="table-cell text-right font-medium text-mint">
                     {transaction.money_in ? formatCurrency(transaction.money_in, transaction.currency) : "-"}
@@ -222,7 +224,7 @@ export function TransactionsTable({
                     <td className="table-cell text-right">
                       <Button className="h-9 px-2" onClick={() => setEditingTransactionId(transaction.id)}>
                         <Edit3 aria-hidden="true" className="h-4 w-4" />
-                        Edit
+                        {t("edit")}
                       </Button>
                     </td>
                   ) : null}
@@ -231,7 +233,7 @@ export function TransactionsTable({
               {filtered.length === 0 ? (
                 <tr>
                   <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={compact ? 6 : 8}>
-                    No transactions found.
+                    {t("emptyTransactions")}
                   </td>
                 </tr>
               ) : null}

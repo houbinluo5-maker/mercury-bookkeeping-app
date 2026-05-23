@@ -28,6 +28,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - Data Management tools for clearing demo data, JSON backup, and JSON restore
 - Transaction editing and deletion with automatic report updates
 - Receipt filters for missing receipts, linked receipts, and reconciliation status
+- English / Simplified Chinese language switch without mixing both languages in navigation or table headers
 
 ## Accounting Rules
 
@@ -170,6 +171,17 @@ The JSON backup includes transactions, categories, receipt status/link data, and
 3. Choose a JSON file previously exported from this app.
 
 Restoring replaces the local transactions, categories, and settings in the current browser. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
+
+## Language Switching
+
+Open Settings and choose `Language` under Company Settings. The MVP currently supports:
+
+- `English`
+- `简体中文`
+
+The selected language is saved in browser `localStorage` as part of the local app settings. The default language is English.
+
+The language switch translates navigation, page headings, labels, buttons, filters, status badges, and report display labels. Internal accounting category and `tax_line` values remain stable in stored transaction data so existing localStorage records, reports, exports, and future database migrations keep working.
 
 ## Editing Transactions
 

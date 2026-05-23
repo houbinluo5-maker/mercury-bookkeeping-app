@@ -5,20 +5,16 @@ import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
 
-const filters = [
-  "All",
-  "Receipt missing",
-  "Receipt linked",
-  "Needs reconciliation",
-  "Reconciled"
-];
+const filters = ["all", "receiptMissing", "receiptLinked", "needsReconciliation", "reconciled"];
 
 export function ReceiptTable() {
   const { transactions, updateTransaction } = useBookkeeping();
-  const [filter, setFilter] = useState("Receipt missing");
+  const { categoryLabel, t } = useI18n();
+  const [filter, setFilter] = useState("receiptMissing");
   const missingReceipts = useMemo(
     () =>
       transactions
@@ -29,27 +25,27 @@ export function ReceiptTable() {
   const filteredTransactions = useMemo(() => {
     return transactions
       .filter((transaction) => {
-        if (filter === "Receipt missing") {
+        if (filter === "receiptMissing") {
           return transaction.receipt_required && !transaction.receipt_link;
         }
-        if (filter === "Receipt linked") return Boolean(transaction.receipt_link);
-        if (filter === "Needs reconciliation") return !transaction.reconciled;
-        if (filter === "Reconciled") return transaction.reconciled;
+        if (filter === "receiptLinked") return Boolean(transaction.receipt_link);
+        if (filter === "needsReconciliation") return !transaction.reconciled;
+        if (filter === "reconciled") return transaction.reconciled;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [filter, transactions]);
 
   function ReceiptStatus({ transaction }: { transaction: Transaction }) {
-    if (transaction.receipt_link) return <Badge tone="green">Receipt linked</Badge>;
-    if (transaction.receipt_required) return <Badge tone="red">Receipt missing</Badge>;
-    return <Badge tone="neutral">Receipt optional</Badge>;
+    if (transaction.receipt_link) return <Badge tone="green">{t("receiptLinked")}</Badge>;
+    if (transaction.receipt_required) return <Badge tone="red">{t("receiptMissing")}</Badge>;
+    return <Badge tone="neutral">{t("receiptOptional")}</Badge>;
   }
 
   function ReconciliationStatus({ transaction }: { transaction: Transaction }) {
     return (
       <Badge tone={transaction.reconciled ? "green" : "amber"}>
-        {transaction.reconciled ? "Reconciled" : "Needs reconciliation"}
+        {transaction.reconciled ? t("reconciled") : t("needsReconciliation")}
       </Badge>
     );
   }
@@ -59,13 +55,13 @@ export function ReceiptTable() {
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-normal text-ink">Missing Receipts</h2>
+            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("missingReceipts")}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              {missingReceipts.length} transaction(s) still need receipt links.
+              {t("transactionsNeedReceiptLinks").replace("{count}", String(missingReceipts.length))}
             </p>
           </div>
           <Badge tone={missingReceipts.length ? "red" : "green"}>
-            {missingReceipts.length ? "Action needed" : "All linked"}
+            {missingReceipts.length ? t("actionNeeded") : t("allLinked")}
           </Badge>
         </div>
         {missingReceipts.length ? (
@@ -94,7 +90,7 @@ export function ReceiptTable() {
             key={item}
             onClick={() => setFilter(item)}
           >
-            {item}
+            {item === "all" ? t("allStatuses") : t(item)}
           </Button>
         ))}
       </div>
@@ -104,12 +100,12 @@ export function ReceiptTable() {
           <table className="min-w-full border-collapse">
             <thead className="table-head">
               <tr>
-                <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">Transaction</th>
-                <th className="px-3 py-3">Category</th>
-                <th className="px-3 py-3 text-right">Amount</th>
-                <th className="px-3 py-3">Receipt Link</th>
-                <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3">{t("date")}</th>
+                <th className="px-3 py-3">{t("transaction")}</th>
+                <th className="px-3 py-3">{t("category")}</th>
+                <th className="px-3 py-3 text-right">{t("amount")}</th>
+                <th className="px-3 py-3">{t("receiptLink")}</th>
+                <th className="px-3 py-3">{t("status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -117,10 +113,10 @@ export function ReceiptTable() {
                 <tr className="hover:bg-slate-50" key={transaction.id}>
                   <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
                   <td className="table-cell min-w-60">
-                    <p className="font-medium text-ink">{transaction.vendor || "Manual entry"}</p>
+                    <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>
                     <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
                   </td>
-                  <td className="table-cell min-w-48">{transaction.category}</td>
+                  <td className="table-cell min-w-48">{categoryLabel(transaction.category)}</td>
                   <td className="table-cell text-right font-medium text-slate-800">
                     {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
                   </td>
@@ -131,18 +127,18 @@ export function ReceiptTable() {
                         onChange={(event) =>
                           updateTransaction(transaction.id, { receipt_link: event.target.value })
                         }
-                        placeholder="https://..."
+                        placeholder={t("receiptLinkPlaceholder")}
                         type="url"
                         value={transaction.receipt_link}
                       />
                       {transaction.receipt_link ? (
                         <a
-                          aria-label="Open receipt"
+                          aria-label={t("openReceipt")}
                           className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-white text-slate-700 hover:bg-slate-50"
                           href={transaction.receipt_link}
                           rel="noreferrer"
                           target="_blank"
-                          title="Open receipt"
+                          title={t("openReceipt")}
                         >
                           <ExternalLink aria-hidden="true" className="h-4 w-4" />
                         </a>
@@ -160,7 +156,7 @@ export function ReceiptTable() {
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>
-                    No transactions match this filter.
+                    {t("noReceiptTransactions")}
                   </td>
                 </tr>
               ) : null}
