@@ -68,6 +68,10 @@ export function classifyTransaction(
     return result("Software Expense", "Shopify subscription and apps are software expense.");
   }
 
+  if (/wise|wire fee|bank fee|mercury fee|service charge|ach fee|international fee/.test(text)) {
+    return result("Bank Fees", "Bank, wire, and payment transfer fees are bank fees.");
+  }
+
   if (/domain|hosting|hostinger|namecheap|godaddy|email|google workspace|cloudflare|website/.test(text)) {
     return result("Website / Hosting", "Domain, hosting, and email are website / hosting expense.");
   }
@@ -92,6 +96,13 @@ export function classifyTransaction(
 
   if (/company brokerage|business brokerage|corporate brokerage|investment account/.test(text)) {
     return result("Investment Transfer", "Transfer to company brokerage is investment transfer.", {
+      receipt_required: false,
+      reconciled: true
+    });
+  }
+
+  if (/internal transfer|between mercury accounts|transfer between accounts|brokerage transfer/.test(text)) {
+    return result("Investment Transfer", "Internal or brokerage transfers are balance sheet transfers.", {
       receipt_required: false,
       reconciled: true
     });

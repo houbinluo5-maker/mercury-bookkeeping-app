@@ -18,6 +18,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Add Transaction form with bookkeeping rule classification
 - Natural language transaction entry with confirmation preview before saving
 - Transactions List with search, category filter, status badges, and Excel export
+- Mercury bank CSV import with browser-side parsing, duplicate detection, category preview, and Supabase/localStorage save
 - Categories / Chart of Accounts
 - Receipts tracker with inline receipt link updates
 - Monthly Report
@@ -42,10 +43,12 @@ The MVP applies these local rules in `lib/accounting-rules.ts` and the natural l
 - Shipping payment -> Shipping / Fulfillment
 - Shopify subscription and apps -> Software Expense
 - Domain, hosting, email -> Website / Hosting
+- Wise, wire fee, and bank fee -> Bank Fees
 - Owner money into company -> Owner Contribution
 - Mercury transfer to owner personal account -> Owner Draw / Member Distribution
 - Mercury transfer to personal IBKR account -> Owner Draw, not business expense
 - Mercury transfer to company brokerage account -> Investment Transfer
+- Internal transfer or brokerage transfer -> Investment Transfer / balance sheet transfer
 
 ## Natural Language Entry
 
@@ -62,6 +65,56 @@ Supported examples:
 - `Owner contributed 2000 to the company`
 
 The parser extracts date, amount, currency, direction, vendor, source, description, category, tax line, receipt requirement, reconciliation status, and notes. Low-confidence parses are clearly marked `Needs review`, and users can edit every parsed field before saving.
+
+## Mercury CSV Import
+
+Open `Import Mercury CSV` in the sidebar to upload a Mercury bank transaction CSV. CSV parsing happens entirely in the browser; the raw file is not sent to Mercury, OpenAI, or any third-party API. Only the confirmed imported transaction records are saved into the app's normal storage flow.
+
+### Export CSV From Mercury
+
+Mercury's support documentation says monthly transaction exports are available from `Documents & Data` -> `Statements`: select the needed account(s), open the vertical-dot download menu for the statement row, then download either a QuickBooks CSV or NetSuite CSV. Mercury also notes that transaction data can be exported from the Accounting page when you are not connected to an accounting integration.
+
+Official references:
+
+- [Exporting transaction data - Mercury](https://support.mercury.com/hc/en-us/articles/28768700685844-Exporting-transaction-data)
+- [Navigating the Accounting page - Mercury](https://support.mercury.com/hc/en-us/articles/35624712696340-Navigating-the-Accounting-page)
+
+### Import CSV Into The App
+
+1. Log in to the bookkeeping app.
+2. Open `Import Mercury CSV`.
+3. Select a `.csv` file exported from Mercury.
+4. Review the preview table before importing.
+5. Adjust categories, receipt-required status, reconciliation status, or row selection as needed.
+6. Select `Import selected rows`.
+
+The parser supports common Mercury-style columns such as `Date`, `Description`, `Amount`, `Currency`, `Status`, `Bank Description`, `Counterparty`, `Reference`, and `Account`. Header matching is flexible, so slight column-name differences are accepted. Positive amounts become `money_in`; negative amounts become positive `money_out`; missing currency defaults to USD.
+
+### Duplicate Detection
+
+The import preview checks possible duplicates against existing transactions using date, signed amount, vendor/description text, and account. Possible duplicates show a warning and are skipped by default. You can manually include or exclude any valid row before importing.
+
+### Classification Rules
+
+The importer applies the same ecommerce bookkeeping categories used elsewhere in the app:
+
+- Meta, Facebook, Instagram, and TikTok ads -> Advertising Expense
+- Shopify payouts -> Revenue
+- Shopify subscriptions and app charges -> Software Expense
+- Supplier, inventory, and purchase order payments -> Product Cost / COGS
+- Shipping, ShipBob, USPS, UPS, FedEx, and fulfillment payments -> Shipping / Fulfillment
+- Namecheap, domain, hosting, and email payments -> Website / Hosting
+- Wise, wire fees, and bank fees -> Bank Fees
+- Owner transfers into the company -> Owner Contribution
+- Transfers to owner personal accounts -> Owner Draw / Member Distribution
+- Internal or brokerage transfers -> Investment Transfer
+- Unknown items -> Uncategorized and Needs review
+
+Imported bank transactions default to `Reconciled` because they come from bank activity. `Receipt required` follows the selected category default. After import, rows appear in Dashboard, Transactions, Monthly Report, Quarterly Report, Annual Tax Summary, and Receipts.
+
+### Review Needs Review Rows
+
+After importing, check the import summary for `Rows needing review`. Then open Transactions and filter/search for `Uncategorized` or `Needs review`. Update the category and tax line, add receipt links where required, and keep supporting documents such as invoices, bills, bank statements, or payment confirmations.
 
 ## Getting Started
 
@@ -118,6 +171,8 @@ This is not a full user management system. Supabase auth is intentionally not en
 ```text
 app/
   accounts/
+  imports/
+    mercury/
   receipts/
   reports/
     annual-tax-summary/

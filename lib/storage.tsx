@@ -24,6 +24,7 @@ type BookkeepingContextValue = {
   categories: Category[];
   storageStatus: StorageStatus;
   addTransaction: (transaction: TransactionDraft) => Transaction;
+  importTransactions: (transactions: TransactionDraft[]) => Transaction[];
   updateTransaction: (id: string, transaction: Partial<TransactionDraft>) => void;
   deleteTransaction: (id: string) => void;
   updateSettings: (settings: AppSettings) => void;
@@ -400,6 +401,27 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     [categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
+  const importTransactions = useCallback(
+    (drafts: TransactionDraft[]) => {
+      const now = new Date().toISOString();
+      const importedTransactions = drafts.map((draft) => ({
+        ...draft,
+        id: createId(),
+        created_at: now,
+        updated_at: now
+      }));
+      const nextTransactions = [...importedTransactions, ...transactions].sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+
+      setTransactions(nextTransactions);
+      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+
+      return importedTransactions;
+    },
+    [categoryState, maybeSyncToSupabase, settings, transactions]
+  );
+
   const updateTransaction = useCallback(
     (id: string, draft: Partial<TransactionDraft>) => {
       const nextTransactions = transactions.map((transaction) =>
@@ -466,6 +488,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       categories: categoryState,
       storageStatus,
       addTransaction,
+      importTransactions,
       updateTransaction,
       deleteTransaction,
       updateSettings,
@@ -483,6 +506,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       clearTransactions,
       deleteTransaction,
       exportBackup,
+      importTransactions,
       importBackup,
       loadFromSupabase,
       migrateLocalDataToSupabase,
