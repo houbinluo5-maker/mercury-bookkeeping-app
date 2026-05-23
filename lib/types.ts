@@ -1,0 +1,60 @@
+export type CategoryType = "Revenue" | "COGS" | "Expense" | "Equity" | "Transfer";
+
+export type Transaction = {
+  id: string;
+  date: string;
+  account: string;
+  source: string;
+  vendor: string;
+  description: string;
+  currency: string;
+  money_in: number;
+  money_out: number;
+  category: string;
+  tax_line: string;
+  receipt_required: boolean;
+  receipt_link: string;
+  reconciled: boolean;
+  notes: string;
+  created_at: string;
+};
+
+export type TransactionDraft = Omit<Transaction, "id" | "created_at">;
+
+export type Category = {
+  id: string;
+  name: string;
+  type: CategoryType;
+  tax_line: string;
+  receipt_required_default: boolean;
+  description: string;
+};
+
+export type AppSettings = {
+  company_name: string;
+  entity_type: string;
+  tax_year: number;
+  default_currency: string;
+  default_account: string;
+  bookkeeping_method: "cash" | "accrual";
+};
+
+export type PeriodSummary = {
+  revenue: number;
+  cogs: number;
+  expenses: number;
+  owner_contributions: number;
+  owner_draws: number;
+  investment_transfers: number;
+  net_income: number;
+  gross_profit: number;
+  cash_net: number;
+};
+
+export type ReportRow = {
+  label: string;
+  type: CategoryType | "Tax";
+  money_in: number;
+  money_out: number;
+  net: number;
+};

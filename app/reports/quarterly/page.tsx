@@ -1,0 +1,67 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
+import { Button } from "@/components/button";
+import { QuarterSelect, YearSelect } from "@/components/period-selectors";
+import { PageHeader } from "@/components/page-header";
+import { ReportSummary } from "@/components/report-summary";
+import { ReportTable } from "@/components/report-table";
+import { TransactionsTable } from "@/components/transactions-table";
+import {
+  filterByQuarter,
+  getAvailableYears,
+  getTransactionQuarter,
+  getTransactionYear,
+  groupByCategory,
+  summarizeTransactions
+} from "@/lib/calculations";
+import { downloadExcel } from "@/lib/export-excel";
+import { useBookkeeping } from "@/lib/storage";
+
+function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transactions"]) {
+  const latest = [...transactions].sort((a, b) => b.date.localeCompare(a.date))[0];
+  return {
+    year: latest ? getTransactionYear(latest) : new Date().getFullYear(),
+    quarter: latest ? getTransactionQuarter(latest) : Math.ceil((new Date().getMonth() + 1) / 3)
+  };
+}
+
+export default function QuarterlyReportPage() {
+  const { transactions } = useBookkeeping();
+  const initial = latestPeriod(transactions);
+  const [year, setYear] = useState(initial.year);
+  const [quarter, setQuarter] = useState(initial.quarter);
+  const years = useMemo(() => getAvailableYears(transactions), [transactions]);
+  const reportTransactions = useMemo(
+    () => filterByQuarter(transactions, year, quarter),
+    [quarter, transactions, year]
+  );
+  const summary = summarizeTransactions(reportTransactions);
+  const rows = groupByCategory(reportTransactions);
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        actions={
+          <>
+            <YearSelect onChange={setYear} value={year} years={years} />
+            <QuarterSelect onChange={setQuarter} value={quarter} />
+            <Button onClick={() => downloadExcel(reportTransactions, `${year}-q${quarter}-report.xls`)}>
+              <Download aria-hidden="true" className="h-4 w-4" />
+              Export
+            </Button>
+          </>
+        }
+        eyebrow={`Q${quarter} ${year}`}
+        title="Quarterly Report"
+      />
+      <ReportSummary summary={summary} />
+      <ReportTable rows={rows} />
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold tracking-normal text-ink">Transactions</h2>
+        <TransactionsTable compact transactions={reportTransactions} />
+      </section>
+    </div>
+  );
+}
