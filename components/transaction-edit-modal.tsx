@@ -28,11 +28,27 @@ export function TransactionEditModal({
 
   function onCategoryChange(categoryName: string) {
     const category = categories.find((item) => item.name === categoryName);
-    updateTransaction(currentTransaction.id, {
+    const shouldUpdateReceiptRequired =
+      category &&
+      category.receipt_required_default !== currentTransaction.receipt_required &&
+      window.confirm(
+        t("updateReceiptRequirementQuestion")
+          .replace("{category}", categoryLabel(category.name))
+          .replace(
+            "{default}",
+            category.receipt_required_default ? t("required") : t("optional")
+          )
+      );
+    const patch: Partial<TransactionDraft> = {
       category: categoryName,
-      tax_line: category?.tax_line ?? currentTransaction.tax_line,
-      receipt_required: category?.receipt_required_default ?? currentTransaction.receipt_required
-    });
+      tax_line: category?.tax_line ?? currentTransaction.tax_line
+    };
+
+    if (category && shouldUpdateReceiptRequired) {
+      patch.receipt_required = category.receipt_required_default;
+    }
+
+    updateTransaction(currentTransaction.id, patch);
   }
 
   function deleteCurrentTransaction() {

@@ -1,4 +1,5 @@
 import type { AppSettings, Category, Transaction } from "@/lib/types";
+import { getReceiptRequiredDefault } from "@/lib/receipt-requirements";
 
 export const categories: Category[] = [
   {
@@ -6,7 +7,7 @@ export const categories: Category[] = [
     name: "Revenue",
     type: "Revenue",
     tax_line: "Gross receipts or sales",
-    receipt_required_default: false,
+    receipt_required_default: getReceiptRequiredDefault("Revenue"),
     description: "Shopify and ecommerce sales deposits before final reconciliation."
   },
   {
@@ -14,7 +15,7 @@ export const categories: Category[] = [
     name: "Advertising Expense",
     type: "Expense",
     tax_line: "Advertising",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Advertising Expense"),
     description: "Meta, Facebook, TikTok, and other paid acquisition spend."
   },
   {
@@ -22,7 +23,7 @@ export const categories: Category[] = [
     name: "Product Cost / COGS",
     type: "COGS",
     tax_line: "Cost of goods sold",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Product Cost / COGS"),
     description: "Inventory supplier and product manufacturing payments."
   },
   {
@@ -30,7 +31,7 @@ export const categories: Category[] = [
     name: "Shipping / Fulfillment",
     type: "Expense",
     tax_line: "Shipping and fulfillment",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Shipping / Fulfillment"),
     description: "Carrier, 3PL, and fulfillment center payments."
   },
   {
@@ -38,7 +39,7 @@ export const categories: Category[] = [
     name: "Software Expense",
     type: "Expense",
     tax_line: "Software and subscriptions",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Software Expense"),
     description: "Shopify subscription, apps, SaaS, and ecommerce tools."
   },
   {
@@ -46,7 +47,7 @@ export const categories: Category[] = [
     name: "Website / Hosting",
     type: "Expense",
     tax_line: "Website, hosting, and email",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Website / Hosting"),
     description: "Domain, hosting, email, and storefront infrastructure."
   },
   {
@@ -54,15 +55,23 @@ export const categories: Category[] = [
     name: "Bank Fees",
     type: "Expense",
     tax_line: "Bank service charges",
-    receipt_required_default: false,
+    receipt_required_default: getReceiptRequiredDefault("Bank Fees"),
     description: "Payment, wire, account, and banking fees."
+  },
+  {
+    id: "payment-processing-fees",
+    name: "Payment Processing Fees",
+    type: "Expense",
+    tax_line: "Payment processing fees",
+    receipt_required_default: getReceiptRequiredDefault("Payment Processing Fees"),
+    description: "Card, merchant, and checkout payment processing fees."
   },
   {
     id: "owner-contribution",
     name: "Owner Contribution",
     type: "Equity",
     tax_line: "Owner contribution - not taxable income",
-    receipt_required_default: false,
+    receipt_required_default: getReceiptRequiredDefault("Owner Contribution"),
     description: "Owner money invested into the company."
   },
   {
@@ -70,7 +79,7 @@ export const categories: Category[] = [
     name: "Owner Draw / Member Distribution",
     type: "Equity",
     tax_line: "Owner draw - not deductible",
-    receipt_required_default: false,
+    receipt_required_default: getReceiptRequiredDefault("Owner Draw / Member Distribution"),
     description: "Transfers from company funds to the owner or personal brokerage."
   },
   {
@@ -78,7 +87,7 @@ export const categories: Category[] = [
     name: "Investment Transfer",
     type: "Transfer",
     tax_line: "Balance sheet transfer - not expense",
-    receipt_required_default: false,
+    receipt_required_default: getReceiptRequiredDefault("Investment Transfer"),
     description: "Transfers from Mercury to a company-owned brokerage account."
   },
   {
@@ -86,7 +95,7 @@ export const categories: Category[] = [
     name: "Uncategorized",
     type: "Expense",
     tax_line: "Needs review",
-    receipt_required_default: true,
+    receipt_required_default: getReceiptRequiredDefault("Uncategorized"),
     description: "Temporary holding category for transactions needing review."
   }
 ];
@@ -108,6 +117,7 @@ export const sourceOptions = [
   "Supplier",
   "Shipping",
   "Software",
+  "Payment Processor",
   "Owner",
   "Manual"
 ];

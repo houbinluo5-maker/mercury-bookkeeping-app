@@ -6,15 +6,27 @@ import { Button } from "@/components/button";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
+import { isExpenseReceiptCategory } from "@/lib/receipt-requirements";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
 
-const filters = ["all", "receiptMissing", "receiptLinked", "needsReconciliation", "reconciled"];
+const filters = [
+  "all",
+  "receiptMissing",
+  "expenseReceiptsRequired",
+  "receiptLinked",
+  "needsReconciliation",
+  "reconciled"
+];
 
 export function ReceiptTable() {
-  const { transactions, updateTransaction } = useBookkeeping();
+  const { categories, transactions, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [filter, setFilter] = useState("receiptMissing");
+  const categoryByName = useMemo(
+    () => new Map(categories.map((category) => [category.name, category])),
+    [categories]
+  );
   const missingReceipts = useMemo(
     () =>
       transactions
@@ -28,13 +40,19 @@ export function ReceiptTable() {
         if (filter === "receiptMissing") {
           return transaction.receipt_required && !transaction.receipt_link;
         }
+        if (filter === "expenseReceiptsRequired") {
+          return (
+            transaction.receipt_required &&
+            isExpenseReceiptCategory(categoryByName.get(transaction.category))
+          );
+        }
         if (filter === "receiptLinked") return Boolean(transaction.receipt_link);
         if (filter === "needsReconciliation") return !transaction.reconciled;
         if (filter === "reconciled") return transaction.reconciled;
         return true;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
-  }, [filter, transactions]);
+  }, [categoryByName, filter, transactions]);
 
   function ReceiptStatus({ transaction }: { transaction: Transaction }) {
     if (transaction.receipt_link) return <Badge tone="green">{t("receiptLinked")}</Badge>;

@@ -8,6 +8,10 @@ import {
   useMemo,
   useState
 } from "react";
+import {
+  getReceiptRequiredDefault,
+  normalizeCategoryReceiptDefault
+} from "@/lib/receipt-requirements";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
 import type {
   AppSettings,
@@ -95,6 +99,7 @@ function normalizeSettings(settings: Partial<AppSettings> | null | undefined): A
 
 function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
   const createdAt = transaction.created_at || new Date().toISOString();
+  const category = String(transaction.category ?? "Uncategorized");
 
   return {
     id: String(transaction.id ?? createId()),
@@ -106,9 +111,12 @@ function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
     currency: String(transaction.currency ?? defaultSettings.default_currency),
     money_in: Number(transaction.money_in ?? 0),
     money_out: Number(transaction.money_out ?? 0),
-    category: String(transaction.category ?? "Uncategorized"),
+    category,
     tax_line: String(transaction.tax_line ?? "Needs review"),
-    receipt_required: Boolean(transaction.receipt_required ?? true),
+    receipt_required:
+      typeof transaction.receipt_required === "boolean"
+        ? transaction.receipt_required
+        : getReceiptRequiredDefault(category),
     receipt_link: String(transaction.receipt_link ?? ""),
     reconciled: Boolean(transaction.reconciled ?? false),
     notes: String(transaction.notes ?? ""),
@@ -117,21 +125,31 @@ function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
   };
 }
 
+function normalizeCategory(category: Partial<Category>): Category {
+  const normalized = {
+    id: String(category.id ?? ""),
+    name: String(category.name ?? ""),
+    type: category.type ?? "Expense",
+    tax_line: String(category.tax_line ?? "Needs review"),
+    receipt_required_default: Boolean(category.receipt_required_default ?? true),
+    description: String(category.description ?? "")
+  };
+
+  return normalizeCategoryReceiptDefault(normalized);
+}
+
 function normalizeCategories(nextCategories: unknown): Category[] {
-  if (!Array.isArray(nextCategories)) return categories;
+  const normalized = Array.isArray(nextCategories)
+    ? nextCategories.map((category) => normalizeCategory(category as Partial<Category>))
+    : [];
+  const categoryByName = new Map(normalized.map((category) => [category.name, category]));
+  const seedCategoryNames = new Set(categories.map((category) => category.name));
+  const mergedKnownCategories = categories.map((category) =>
+    normalizeCategoryReceiptDefault(categoryByName.get(category.name) ?? category)
+  );
+  const customCategories = normalized.filter((category) => !seedCategoryNames.has(category.name));
 
-  return nextCategories.map((category) => {
-    const item = category as Partial<Category>;
-
-    return {
-      id: String(item.id ?? ""),
-      name: String(item.name ?? ""),
-      type: item.type ?? "Expense",
-      tax_line: String(item.tax_line ?? "Needs review"),
-      receipt_required_default: Boolean(item.receipt_required_default ?? true),
-      description: String(item.description ?? "")
-    };
-  });
+  return [...mergedKnownCategories, ...customCategories];
 }
 
 function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {

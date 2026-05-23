@@ -44,6 +44,7 @@ The MVP applies these local rules in `lib/accounting-rules.ts` and the natural l
 - Shopify subscription and apps -> Software Expense
 - Domain, hosting, email -> Website / Hosting
 - Wise, wire fee, and bank fee -> Bank Fees
+- Stripe, PayPal, Shopify Payments, and merchant processing fees -> Payment Processing Fees
 - Owner money into company -> Owner Contribution
 - Mercury transfer to owner personal account -> Owner Draw / Member Distribution
 - Mercury transfer to personal IBKR account -> Owner Draw, not business expense
@@ -105,6 +106,7 @@ The importer applies the same ecommerce bookkeeping categories used elsewhere in
 - Shipping, ShipBob, USPS, UPS, FedEx, and fulfillment payments -> Shipping / Fulfillment
 - Namecheap, domain, hosting, and email payments -> Website / Hosting
 - Wise, wire fees, and bank fees -> Bank Fees
+- Stripe, PayPal, Shopify Payments, and merchant processing fees -> Payment Processing Fees
 - Owner transfers into the company -> Owner Contribution
 - Transfers to owner personal accounts -> Owner Draw / Member Distribution
 - Internal or brokerage transfers -> Investment Transfer
@@ -351,6 +353,8 @@ Supported upload types:
 - WebP
 
 Uploads are limited to `10 MB`. Replacing an uploaded receipt stores the new file and deletes the previous app-managed object from Supabase Storage. Deleting a receipt removes app-managed uploaded files from Storage and clears `transaction.receipt_link`; manual external links are only unlinked from the transaction.
+
+Expense and COGS categories require receipts by default, including Advertising Expense, Product Cost / COGS, Shipping / Fulfillment, Software Expense, Website / Hosting, Bank Fees, and Payment Processing Fees. Revenue, owner equity activity, and investment/internal transfers default to receipt optional unless you manually mark a transaction as receipt required.
 
 - `Receipt missing`: the transaction requires a receipt, but `receipt_link` is empty.
 - `Receipt linked`: a receipt URL or uploaded receipt path is present.
