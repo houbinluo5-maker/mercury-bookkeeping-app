@@ -8,11 +8,11 @@ import { Badge } from "@/components/badge";
 import { classifyTransaction } from "@/lib/accounting-rules";
 import {
   parseNaturalLanguageTransaction,
-  sampleNaturalLanguagePhrases,
   type NaturalLanguageParseResult
 } from "@/lib/natural-language-parser";
 import { accountOptions, sourceOptions } from "@/lib/seed-data";
 import { formatCurrency, formatDate, toDateInputValue } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 import type { TransactionDraft } from "@/lib/types";
 
@@ -36,6 +36,15 @@ const emptyDraft: TransactionDraft = {
 export function TransactionForm() {
   const router = useRouter();
   const { addTransaction, categories, settings } = useBookkeeping();
+  const {
+    categoryLabel,
+    parserIssue,
+    parserSummary,
+    ruleReason,
+    samplePhrases,
+    t,
+    taxLineLabel
+  } = useI18n();
   const [draft, setDraft] = useState<TransactionDraft>({
     ...emptyDraft,
     account: settings.default_account,
@@ -67,7 +76,7 @@ export function TransactionForm() {
     setNaturalInput(value);
     setDraft(result.draft);
     setParseResult(result);
-    setAppliedRule(result.needsReview ? "Needs review before saving." : "Parsed from natural language.");
+    setAppliedRule(result.needsReview ? t("needsReview") : t("parsedFromNaturalLanguage"));
   }
 
   function applyRule() {
@@ -79,7 +88,7 @@ export function TransactionForm() {
       reconciled: suggestedRule.reconciled,
       notes: current.notes || suggestedRule.notes || current.notes
     }));
-    setAppliedRule(suggestedRule.reason);
+    setAppliedRule(ruleReason(suggestedRule.reason));
   }
 
   function onCategoryChange(categoryName: string) {
@@ -108,32 +117,37 @@ export function TransactionForm() {
       <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <label className="block flex-1 space-y-1">
-            <span className="form-label">Natural Language Entry</span>
+            <span className="form-label">{t("naturalLanguageEntry")}</span>
             <textarea
               className="form-textarea min-h-20"
               onChange={(event) => setNaturalLanguage(event.target.value)}
-              placeholder="Today Meta ads spent 400 dollars"
+              placeholder={t("naturalLanguagePlaceholder")}
               value={naturalInput}
             />
           </label>
           <div className="pt-6">
             <Button disabled={!naturalInput.trim()} onClick={() => parseNaturalLanguage()}>
               <Wand2 aria-hidden="true" className="h-4 w-4" />
-              Parse sentence
+              {t("parseSentence")}
             </Button>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {sampleNaturalLanguagePhrases.map((phrase) => (
-            <Button
-              className="h-auto min-h-9 px-2 py-1 text-xs"
-              key={phrase}
-              onClick={() => parseNaturalLanguage(phrase)}
-            >
-              {phrase}
-            </Button>
-          ))}
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-normal text-slate-500">
+            {t("examplePhrases")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {samplePhrases.map((phrase) => (
+              <Button
+                className="h-auto min-h-9 px-2 py-1 text-xs"
+                key={phrase.value}
+                onClick={() => parseNaturalLanguage(phrase.value)}
+              >
+                {phrase.label}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {parseResult ? (
@@ -141,61 +155,62 @@ export function TransactionForm() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={parseResult.needsReview ? "amber" : "green"}>
-                  {parseResult.summary}
+                  {parserSummary(parseResult.summary)}
                 </Badge>
-                {parseResult.needsReview ? <Badge tone="red">Needs review</Badge> : null}
+                {parseResult.needsReview ? <Badge tone="red">{t("needsReview")}</Badge> : null}
                 <span className="text-sm text-slate-600">
-                  {Math.round(parseResult.confidence * 100)}% parser confidence
+                  {Math.round(parseResult.confidence * 100)}% {t("parserConfidence")}
                 </span>
               </div>
-              <p className="text-sm font-semibold text-ink">Confirmation preview</p>
+              <p className="text-sm font-semibold text-ink">{t("confirmationPreview")}</p>
             </div>
+            <p className="mt-2 text-sm text-slate-600">{t("editParsedFieldsBeforeSaving")}</p>
             <dl className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div>
-                <dt className="form-label">Date</dt>
+                <dt className="form-label">{t("date")}</dt>
                 <dd className="mt-1 text-sm font-medium text-ink">{formatDate(draft.date)}</dd>
               </div>
               <div>
-                <dt className="form-label">Amount</dt>
+                <dt className="form-label">{t("amount")}</dt>
                 <dd className="mt-1 text-sm font-medium text-ink">
                   {draft.money_in > 0
-                    ? `${formatCurrency(draft.money_in, draft.currency)} in`
-                    : `${formatCurrency(draft.money_out, draft.currency)} out`}
+                    ? `${formatCurrency(draft.money_in, draft.currency)} ${t("moneyIn")}`
+                    : `${formatCurrency(draft.money_out, draft.currency)} ${t("moneyOut")}`}
                 </dd>
               </div>
               <div>
-                <dt className="form-label">Vendor</dt>
-                <dd className="mt-1 text-sm font-medium text-ink">{draft.vendor || "Needs review"}</dd>
+                <dt className="form-label">{t("vendor")}</dt>
+                <dd className="mt-1 text-sm font-medium text-ink">{draft.vendor || t("needsReview")}</dd>
               </div>
               <div>
-                <dt className="form-label">Category</dt>
-                <dd className="mt-1 text-sm font-medium text-ink">{draft.category}</dd>
+                <dt className="form-label">{t("category")}</dt>
+                <dd className="mt-1 text-sm font-medium text-ink">{categoryLabel(draft.category)}</dd>
               </div>
               <div>
-                <dt className="form-label">Tax Line</dt>
-                <dd className="mt-1 text-sm font-medium text-ink">{draft.tax_line}</dd>
+                <dt className="form-label">{t("taxLine")}</dt>
+                <dd className="mt-1 text-sm font-medium text-ink">{taxLineLabel(draft.tax_line)}</dd>
               </div>
               <div>
-                <dt className="form-label">Receipt</dt>
+                <dt className="form-label">{t("receipt")}</dt>
                 <dd className="mt-1 text-sm font-medium text-ink">
-                  {draft.receipt_required ? "Required" : "Optional"}
+                  {draft.receipt_required ? t("required") : t("optional")}
                 </dd>
               </div>
               <div>
-                <dt className="form-label">Reconciliation</dt>
+                <dt className="form-label">{t("reconciliation")}</dt>
                 <dd className="mt-1 text-sm font-medium text-ink">
-                  {draft.reconciled ? "Reconciled" : "Needs reconciliation"}
+                  {draft.reconciled ? t("reconciled") : t("needsReconciliation")}
                 </dd>
               </div>
               <div>
-                <dt className="form-label">Source</dt>
+                <dt className="form-label">{t("source")}</dt>
                 <dd className="mt-1 text-sm font-medium text-ink">{draft.source}</dd>
               </div>
             </dl>
             {parseResult.issues.length > 0 ? (
               <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{parseResult.issues.join(" ")}</span>
+                <span>{parseResult.issues.map(parserIssue).join(" ")}</span>
               </div>
             ) : null}
           </div>
@@ -204,7 +219,7 @@ export function TransactionForm() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-1">
-          <span className="form-label">Date</span>
+          <span className="form-label">{t("date")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("date", event.target.value)}
@@ -214,7 +229,7 @@ export function TransactionForm() {
           />
         </label>
         <label className="space-y-1">
-          <span className="form-label">Account</span>
+          <span className="form-label">{t("account")}</span>
           <input
             className="form-input"
             list="account-options"
@@ -229,7 +244,7 @@ export function TransactionForm() {
           </datalist>
         </label>
         <label className="space-y-1">
-          <span className="form-label">Source</span>
+          <span className="form-label">{t("source")}</span>
           <input
             className="form-input"
             list="source-options"
@@ -244,11 +259,11 @@ export function TransactionForm() {
           </datalist>
         </label>
         <label className="space-y-1">
-          <span className="form-label">Vendor</span>
+          <span className="form-label">{t("vendor")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("vendor", event.target.value)}
-            placeholder="Shopify Payout"
+            placeholder={t("vendorPlaceholder")}
             value={draft.vendor}
           />
         </label>
@@ -256,7 +271,7 @@ export function TransactionForm() {
 
       <section className="grid gap-4 lg:grid-cols-[1fr_14rem_14rem]">
         <label className="space-y-1">
-          <span className="form-label">Description</span>
+          <span className="form-label">{t("description")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("description", event.target.value)}
@@ -265,7 +280,7 @@ export function TransactionForm() {
           />
         </label>
         <label className="space-y-1">
-          <span className="form-label">Money In</span>
+          <span className="form-label">{t("moneyIn")}</span>
           <input
             className="form-input"
             min="0"
@@ -276,7 +291,7 @@ export function TransactionForm() {
           />
         </label>
         <label className="space-y-1">
-          <span className="form-label">Money Out</span>
+          <span className="form-label">{t("moneyOut")}</span>
           <input
             className="form-input"
             min="0"
@@ -290,7 +305,7 @@ export function TransactionForm() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_10rem]">
         <label className="space-y-1">
-          <span className="form-label">Category</span>
+          <span className="form-label">{t("category")}</span>
           <select
             className="form-input"
             onChange={(event) => onCategoryChange(event.target.value)}
@@ -298,13 +313,13 @@ export function TransactionForm() {
           >
             {categories.map((category) => (
               <option key={category.id} value={category.name}>
-                {category.name}
+                {categoryLabel(category.name)}
               </option>
             ))}
           </select>
         </label>
         <label className="space-y-1">
-          <span className="form-label">Tax Line</span>
+          <span className="form-label">{t("taxLine")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("tax_line", event.target.value)}
@@ -312,7 +327,7 @@ export function TransactionForm() {
           />
         </label>
         <label className="space-y-1">
-          <span className="form-label">Currency</span>
+          <span className="form-label">{t("currency")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("currency", event.target.value.toUpperCase())}
@@ -324,11 +339,11 @@ export function TransactionForm() {
 
       <section className="grid gap-4 lg:grid-cols-[1fr_18rem]">
         <label className="space-y-1">
-          <span className="form-label">Receipt Link</span>
+          <span className="form-label">{t("receiptLink")}</span>
           <input
             className="form-input"
             onChange={(event) => setField("receipt_link", event.target.value)}
-            placeholder="https://..."
+            placeholder={t("receiptLinkPlaceholder")}
             type="url"
             value={draft.receipt_link}
           />
@@ -340,7 +355,7 @@ export function TransactionForm() {
               onChange={(event) => setField("receipt_required", event.target.checked)}
               type="checkbox"
             />
-            Receipt required
+            {t("receiptRequired")}
           </label>
           <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
             <input
@@ -348,13 +363,13 @@ export function TransactionForm() {
               onChange={(event) => setField("reconciled", event.target.checked)}
               type="checkbox"
             />
-            Reconciled
+            {t("reconciled")}
           </label>
         </div>
       </section>
 
       <label className="block space-y-1">
-        <span className="form-label">Notes</span>
+        <span className="form-label">{t("notes")}</span>
         <textarea
           className="form-textarea"
           onChange={(event) => setField("notes", event.target.value)}
@@ -365,18 +380,20 @@ export function TransactionForm() {
       <div className="flex flex-col gap-3 rounded-lg border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={suggestedRule.category === "Uncategorized" ? "amber" : "blue"}>
-            {suggestedRule.category}
+            {categoryLabel(suggestedRule.category)}
           </Badge>
-          <span className="text-sm text-slate-600">{appliedRule || suggestedRule.reason}</span>
+          <span className="text-sm text-slate-600">
+            {appliedRule || (suggestedRule.category === "Uncategorized" ? t("needsReview") : categoryLabel(suggestedRule.category))}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={applyRule}>
             <Sparkles aria-hidden="true" className="h-4 w-4" />
-            Apply rules
+            {t("applyRules")}
           </Button>
           <Button disabled={requiresNaturalPreview} type="submit" variant="primary">
             <Save aria-hidden="true" className="h-4 w-4" />
-            {requiresNaturalPreview ? "Parse before saving" : "Save transaction"}
+            {requiresNaturalPreview ? t("parseBeforeSaving") : t("saveTransaction")}
           </Button>
         </div>
       </div>
@@ -384,7 +401,7 @@ export function TransactionForm() {
       {draft.money_in > 0 && draft.money_out > 0 ? (
         <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           <Check aria-hidden="true" className="h-4 w-4" />
-          Split entries should be recorded as separate transactions.
+          {t("splitEntriesWarning")}
         </div>
       ) : null}
     </form>

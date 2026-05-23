@@ -3,6 +3,7 @@
 import { Trash2, X } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
+import { useI18n } from "@/lib/i18n";
 import { accountOptions, sourceOptions } from "@/lib/seed-data";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction, TransactionDraft } from "@/lib/types";
@@ -15,6 +16,7 @@ export function TransactionEditModal({
   onClose: () => void;
 }) {
   const { categories, deleteTransaction, updateTransaction } = useBookkeeping();
+  const { categoryLabel, t } = useI18n();
 
   if (!transaction) return null;
   const currentTransaction = transaction;
@@ -33,7 +35,7 @@ export function TransactionEditModal({
   }
 
   function deleteCurrentTransaction() {
-    if (window.confirm("Delete this transaction? This cannot be undone.")) {
+    if (window.confirm(t("deleteTransactionQuestion"))) {
       deleteTransaction(currentTransaction.id);
       onClose();
     }
@@ -45,17 +47,15 @@ export function TransactionEditModal({
         <div className="flex items-start justify-between gap-4 border-b border-line p-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold tracking-normal text-ink">Edit Transaction</h2>
+              <h2 className="text-lg font-semibold tracking-normal text-ink">{t("editTransaction")}</h2>
               <Badge tone={currentTransaction.reconciled ? "green" : "amber"}>
-                {currentTransaction.reconciled ? "Reconciled" : "Needs reconciliation"}
+                {currentTransaction.reconciled ? t("reconciled") : t("needsReconciliation")}
               </Badge>
             </div>
-            <p className="mt-1 text-sm text-slate-600">
-              Changes save immediately to localStorage and update all reports.
-            </p>
+            <p className="mt-1 text-sm text-slate-600">{t("changesSaveImmediately")}</p>
           </div>
           <button
-            aria-label="Close"
+            aria-label={t("close")}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-line text-slate-600 hover:bg-slate-50"
             onClick={onClose}
             type="button"
@@ -66,7 +66,7 @@ export function TransactionEditModal({
 
         <div className="grid gap-4 p-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="space-y-1">
-            <span className="form-label">Date</span>
+            <span className="form-label">{t("date")}</span>
             <input
               className="form-input"
               onChange={(event) => setField("date", event.target.value)}
@@ -75,7 +75,7 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1">
-            <span className="form-label">Account</span>
+            <span className="form-label">{t("account")}</span>
             <input
               className="form-input"
               list="edit-account-options"
@@ -89,7 +89,7 @@ export function TransactionEditModal({
             </datalist>
           </label>
           <label className="space-y-1">
-            <span className="form-label">Source</span>
+            <span className="form-label">{t("source")}</span>
             <input
               className="form-input"
               list="edit-source-options"
@@ -103,7 +103,7 @@ export function TransactionEditModal({
             </datalist>
           </label>
           <label className="space-y-1">
-            <span className="form-label">Vendor</span>
+            <span className="form-label">{t("vendor")}</span>
             <input
               className="form-input"
               onChange={(event) => setField("vendor", event.target.value)}
@@ -111,7 +111,7 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1 md:col-span-2">
-            <span className="form-label">Description</span>
+            <span className="form-label">{t("description")}</span>
             <input
               className="form-input"
               onChange={(event) => setField("description", event.target.value)}
@@ -119,7 +119,7 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1">
-            <span className="form-label">Money In</span>
+            <span className="form-label">{t("moneyIn")}</span>
             <input
               className="form-input"
               min="0"
@@ -130,7 +130,7 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1">
-            <span className="form-label">Money Out</span>
+            <span className="form-label">{t("moneyOut")}</span>
             <input
               className="form-input"
               min="0"
@@ -141,7 +141,7 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1 md:col-span-2">
-            <span className="form-label">Category</span>
+            <span className="form-label">{t("category")}</span>
             <select
               className="form-input"
               onChange={(event) => onCategoryChange(event.target.value)}
@@ -149,13 +149,13 @@ export function TransactionEditModal({
             >
               {categories.map((category) => (
                 <option key={category.id} value={category.name}>
-                  {category.name}
+                  {categoryLabel(category.name)}
                 </option>
               ))}
             </select>
           </label>
           <label className="space-y-1 md:col-span-2">
-            <span className="form-label">Tax Line</span>
+            <span className="form-label">{t("taxLine")}</span>
             <input
               className="form-input"
               onChange={(event) => setField("tax_line", event.target.value)}
@@ -163,11 +163,11 @@ export function TransactionEditModal({
             />
           </label>
           <label className="space-y-1 md:col-span-2 xl:col-span-3">
-            <span className="form-label">Receipt Link</span>
+            <span className="form-label">{t("receiptLink")}</span>
             <input
               className="form-input"
               onChange={(event) => setField("receipt_link", event.target.value)}
-              placeholder="https://..."
+              placeholder={t("receiptLinkPlaceholder")}
               type="url"
               value={currentTransaction.receipt_link}
             />
@@ -179,7 +179,7 @@ export function TransactionEditModal({
                 onChange={(event) => setField("receipt_required", event.target.checked)}
                 type="checkbox"
               />
-              Receipt required
+              {t("receiptRequired")}
             </label>
             <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
               <input
@@ -187,11 +187,11 @@ export function TransactionEditModal({
                 onChange={(event) => setField("reconciled", event.target.checked)}
                 type="checkbox"
               />
-              Reconciled
+              {t("reconciled")}
             </label>
           </div>
           <label className="space-y-1 md:col-span-2 xl:col-span-4">
-            <span className="form-label">Notes</span>
+            <span className="form-label">{t("notes")}</span>
             <textarea
               className="form-textarea"
               onChange={(event) => setField("notes", event.target.value)}
@@ -203,10 +203,10 @@ export function TransactionEditModal({
         <div className="flex flex-wrap justify-between gap-2 border-t border-line p-4">
           <Button onClick={deleteCurrentTransaction} variant="danger">
             <Trash2 aria-hidden="true" className="h-4 w-4" />
-            Delete transaction
+            {t("deleteTransaction")}
           </Button>
           <Button onClick={onClose} variant="primary">
-            Done
+            {t("done")}
           </Button>
         </div>
       </div>

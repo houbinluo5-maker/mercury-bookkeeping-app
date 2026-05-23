@@ -17,7 +17,7 @@ import {
   summarizeTransactions
 } from "@/lib/calculations";
 import { downloadExcel } from "@/lib/export-excel";
-import { monthName } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transactions"]) {
@@ -30,6 +30,7 @@ function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transacti
 
 export default function MonthlyReportPage() {
   const { transactions } = useBookkeeping();
+  const { monthLabel, t } = useI18n();
   const initial = latestPeriod(transactions);
   const [year, setYear] = useState(initial.year);
   const [month, setMonth] = useState(initial.month);
@@ -50,17 +51,17 @@ export default function MonthlyReportPage() {
             <MonthSelect onChange={setMonth} value={month} />
             <Button onClick={() => downloadExcel(reportTransactions, `${year}-${month}-monthly-report.xls`)}>
               <Download aria-hidden="true" className="h-4 w-4" />
-              Export
+              {t("export")}
             </Button>
           </>
         }
-        eyebrow={`${monthName(month - 1)} ${year}`}
-        title="Monthly Report"
+        eyebrow={`${monthLabel(month - 1)} ${year}`}
+        title={t("monthlyReport")}
       />
       <ReportSummary summary={summary} />
       <ReportTable rows={rows} />
       <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-normal text-ink">Transactions</h2>
+        <h2 className="text-lg font-semibold tracking-normal text-ink">{t("reportsTransactions")}</h2>
         <TransactionsTable compact transactions={reportTransactions} />
       </section>
     </div>

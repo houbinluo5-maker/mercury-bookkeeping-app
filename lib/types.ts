@@ -1,4 +1,5 @@
 export type CategoryType = "Revenue" | "COGS" | "Expense" | "Equity" | "Transfer";
+export type Language = "en" | "zh";
 
 export type Transaction = {
   id: string;
@@ -38,6 +39,7 @@ export type AppSettings = {
   default_account: string;
   bookkeeping_method: "cash" | "accrual";
   business_type_tax_notes: string;
+  language: Language;
 };
 
 export type LocalBackup = {
