@@ -1,0 +1,341 @@
+import type { AppSettings, Category, Transaction } from "@/lib/types";
+
+export const categories: Category[] = [
+  {
+    id: "revenue",
+    name: "Revenue",
+    type: "Revenue",
+    tax_line: "Gross receipts or sales",
+    receipt_required_default: false,
+    description: "Shopify and ecommerce sales deposits before final reconciliation."
+  },
+  {
+    id: "advertising-expense",
+    name: "Advertising Expense",
+    type: "Expense",
+    tax_line: "Advertising",
+    receipt_required_default: true,
+    description: "Meta, Facebook, TikTok, and other paid acquisition spend."
+  },
+  {
+    id: "product-cost-cogs",
+    name: "Product Cost / COGS",
+    type: "COGS",
+    tax_line: "Cost of goods sold",
+    receipt_required_default: true,
+    description: "Inventory supplier and product manufacturing payments."
+  },
+  {
+    id: "shipping-fulfillment",
+    name: "Shipping / Fulfillment",
+    type: "Expense",
+    tax_line: "Shipping and fulfillment",
+    receipt_required_default: true,
+    description: "Carrier, 3PL, and fulfillment center payments."
+  },
+  {
+    id: "software-expense",
+    name: "Software Expense",
+    type: "Expense",
+    tax_line: "Software and subscriptions",
+    receipt_required_default: true,
+    description: "Shopify subscription, apps, SaaS, and ecommerce tools."
+  },
+  {
+    id: "website-hosting",
+    name: "Website / Hosting",
+    type: "Expense",
+    tax_line: "Website, hosting, and email",
+    receipt_required_default: true,
+    description: "Domain, hosting, email, and storefront infrastructure."
+  },
+  {
+    id: "bank-fees",
+    name: "Bank Fees",
+    type: "Expense",
+    tax_line: "Bank service charges",
+    receipt_required_default: false,
+    description: "Payment, wire, account, and banking fees."
+  },
+  {
+    id: "owner-contribution",
+    name: "Owner Contribution",
+    type: "Equity",
+    tax_line: "Owner contribution - not taxable income",
+    receipt_required_default: false,
+    description: "Owner money invested into the company."
+  },
+  {
+    id: "owner-draw",
+    name: "Owner Draw / Member Distribution",
+    type: "Equity",
+    tax_line: "Owner draw - not deductible",
+    receipt_required_default: false,
+    description: "Transfers from company funds to the owner or personal brokerage."
+  },
+  {
+    id: "investment-transfer",
+    name: "Investment Transfer",
+    type: "Transfer",
+    tax_line: "Balance sheet transfer - not expense",
+    receipt_required_default: false,
+    description: "Transfers from Mercury to a company-owned brokerage account."
+  },
+  {
+    id: "uncategorized",
+    name: "Uncategorized",
+    type: "Expense",
+    tax_line: "Needs review",
+    receipt_required_default: true,
+    description: "Temporary holding category for transactions needing review."
+  }
+];
+
+export const accountOptions = [
+  "Mercury Checking",
+  "Mercury Savings",
+  "Company Brokerage",
+  "Credit Card",
+  "Shopify Balance"
+];
+
+export const sourceOptions = [
+  "Mercury",
+  "Shopify",
+  "Meta Ads",
+  "Facebook Ads",
+  "TikTok Ads",
+  "Supplier",
+  "Shipping",
+  "Software",
+  "Owner",
+  "Manual"
+];
+
+export const defaultSettings: AppSettings = {
+  company_name: "Mercury Bookkeeping LLC",
+  entity_type: "US LLC",
+  tax_year: 2026,
+  default_currency: "USD",
+  default_account: "Mercury Checking",
+  bookkeeping_method: "cash"
+};
+
+export const seedTransactions: Transaction[] = [
+  {
+    id: "txn-2026-001",
+    date: "2026-01-04",
+    account: "Mercury Checking",
+    source: "Owner",
+    vendor: "Owner",
+    description: "Initial owner funding into company checking",
+    currency: "USD",
+    money_in: 12000,
+    money_out: 0,
+    category: "Owner Contribution",
+    tax_line: "Owner contribution - not taxable income",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: true,
+    notes: "Seed capital for ecommerce launch.",
+    created_at: "2026-01-04T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-002",
+    date: "2026-01-08",
+    account: "Mercury Checking",
+    source: "Shopify",
+    vendor: "Shopify Payout",
+    description: "Shopify payout for first week sales",
+    currency: "USD",
+    money_in: 6840.22,
+    money_out: 0,
+    category: "Revenue",
+    tax_line: "Gross receipts or sales",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: false,
+    notes: "Needs reconciliation to Shopify gross sales, refunds, fees, and sales tax.",
+    created_at: "2026-01-08T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-003",
+    date: "2026-01-12",
+    account: "Mercury Checking",
+    source: "Meta Ads",
+    vendor: "Meta Platforms",
+    description: "Facebook Ads campaign spend",
+    currency: "USD",
+    money_in: 0,
+    money_out: 1250.4,
+    category: "Advertising Expense",
+    tax_line: "Advertising",
+    receipt_required: true,
+    receipt_link: "https://example.com/receipts/meta-jan.pdf",
+    reconciled: true,
+    notes: "",
+    created_at: "2026-01-12T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-004",
+    date: "2026-01-18",
+    account: "Mercury Checking",
+    source: "Supplier",
+    vendor: "Shenzhen Bright Goods Co.",
+    description: "Supplier payment for inventory PO-1002",
+    currency: "USD",
+    money_in: 0,
+    money_out: 4150,
+    category: "Product Cost / COGS",
+    tax_line: "Cost of goods sold",
+    receipt_required: true,
+    receipt_link: "https://example.com/receipts/supplier-po-1002.pdf",
+    reconciled: true,
+    notes: "Inventory lot for Q1 sales.",
+    created_at: "2026-01-18T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-005",
+    date: "2026-02-02",
+    account: "Mercury Checking",
+    source: "Shipping",
+    vendor: "ShipBob",
+    description: "Fulfillment and outbound shipping",
+    currency: "USD",
+    money_in: 0,
+    money_out: 920.73,
+    category: "Shipping / Fulfillment",
+    tax_line: "Shipping and fulfillment",
+    receipt_required: true,
+    receipt_link: "",
+    reconciled: true,
+    notes: "Receipt still needed.",
+    created_at: "2026-02-02T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-006",
+    date: "2026-02-05",
+    account: "Mercury Checking",
+    source: "Shopify",
+    vendor: "Shopify",
+    description: "Shopify subscription and app charges",
+    currency: "USD",
+    money_in: 0,
+    money_out: 178.35,
+    category: "Software Expense",
+    tax_line: "Software and subscriptions",
+    receipt_required: true,
+    receipt_link: "https://example.com/receipts/shopify-feb.pdf",
+    reconciled: true,
+    notes: "",
+    created_at: "2026-02-05T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-007",
+    date: "2026-02-11",
+    account: "Mercury Checking",
+    source: "TikTok Ads",
+    vendor: "TikTok for Business",
+    description: "TikTok Ads conversion campaign",
+    currency: "USD",
+    money_in: 0,
+    money_out: 740,
+    category: "Advertising Expense",
+    tax_line: "Advertising",
+    receipt_required: true,
+    receipt_link: "",
+    reconciled: false,
+    notes: "Pending monthly ad invoice.",
+    created_at: "2026-02-11T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-008",
+    date: "2026-02-20",
+    account: "Mercury Checking",
+    source: "Mercury",
+    vendor: "Owner Personal Account",
+    description: "Mercury transfer to owner personal account",
+    currency: "USD",
+    money_in: 0,
+    money_out: 2500,
+    category: "Owner Draw / Member Distribution",
+    tax_line: "Owner draw - not deductible",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: true,
+    notes: "Member distribution, not a business expense.",
+    created_at: "2026-02-20T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-009",
+    date: "2026-03-03",
+    account: "Mercury Checking",
+    source: "Manual",
+    vendor: "Namecheap",
+    description: "Domain renewal and email forwarding",
+    currency: "USD",
+    money_in: 0,
+    money_out: 64.12,
+    category: "Website / Hosting",
+    tax_line: "Website, hosting, and email",
+    receipt_required: true,
+    receipt_link: "https://example.com/receipts/namecheap-mar.pdf",
+    reconciled: true,
+    notes: "",
+    created_at: "2026-03-03T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-010",
+    date: "2026-03-15",
+    account: "Mercury Checking",
+    source: "Mercury",
+    vendor: "Personal IBKR Account",
+    description: "Mercury transfer to personal IBKR account",
+    currency: "USD",
+    money_in: 0,
+    money_out: 1800,
+    category: "Owner Draw / Member Distribution",
+    tax_line: "Owner draw - not deductible",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: true,
+    notes: "Personal brokerage transfer treated as owner draw.",
+    created_at: "2026-03-15T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-011",
+    date: "2026-03-21",
+    account: "Mercury Checking",
+    source: "Mercury",
+    vendor: "Company Brokerage",
+    description: "Mercury transfer to company brokerage account",
+    currency: "USD",
+    money_in: 0,
+    money_out: 3000,
+    category: "Investment Transfer",
+    tax_line: "Balance sheet transfer - not expense",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: true,
+    notes: "Company investment account transfer.",
+    created_at: "2026-03-21T12:00:00.000Z"
+  },
+  {
+    id: "txn-2026-012",
+    date: "2026-04-06",
+    account: "Mercury Checking",
+    source: "Shopify",
+    vendor: "Shopify Payout",
+    description: "Shopify payout for spring sale",
+    currency: "USD",
+    money_in: 10220.91,
+    money_out: 0,
+    category: "Revenue",
+    tax_line: "Gross receipts or sales",
+    receipt_required: false,
+    receipt_link: "",
+    reconciled: false,
+    notes: "Needs reconciliation against Shopify order export.",
+    created_at: "2026-04-06T12:00:00.000Z"
+  }
+];
