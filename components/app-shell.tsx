@@ -8,6 +8,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   PlusCircle,
   ReceiptText,
   Settings,
@@ -35,6 +36,10 @@ function isActive(pathname: string, href: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
+  if (pathname === "/login") {
+    return <main className="min-h-screen bg-paper">{children}</main>;
+  }
+
   return (
     <div className="min-h-screen bg-paper">
       <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-line bg-white xl:block">
@@ -47,28 +52,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-slate-500">US LLC ecommerce</p>
           </div>
         </div>
-        <nav className="space-y-1 px-3 py-5">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = isActive(pathname, item.href);
+        <div className="flex h-[calc(100vh-5rem)] flex-col justify-between">
+          <nav className="space-y-1 px-3 py-5">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(pathname, item.href);
 
-            return (
-              <Link
-                className={clsx(
-                  "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
-                  active
-                    ? "bg-marine text-white"
-                    : "text-slate-700 hover:bg-slate-100 hover:text-ink"
-                )}
-                href={item.href}
-                key={item.href}
-              >
-                <Icon aria-hidden="true" className="h-4 w-4" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+              return (
+                <Link
+                  className={clsx(
+                    "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
+                    active
+                      ? "bg-marine text-white"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-ink"
+                  )}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <Icon aria-hidden="true" className="h-4 w-4" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          <form action="/api/auth/logout" className="border-t border-line p-3" method="post">
+            <button
+              className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-ink"
+              type="submit"
+            >
+              <LogOut aria-hidden="true" className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
+          </form>
+        </div>
       </aside>
 
       <div className="xl:pl-72">
@@ -96,6 +112,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <form action="/api/auth/logout" method="post">
+              <button
+                aria-label="Logout"
+                className="flex h-10 min-w-10 items-center justify-center rounded-md border border-line bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50"
+                title="Logout"
+                type="submit"
+              >
+                <LogOut aria-hidden="true" className="h-4 w-4" />
+                <span className="ml-2 hidden sm:inline">Logout</span>
+              </button>
+            </form>
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
