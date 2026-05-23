@@ -1,83 +1,172 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { Badge } from "@/components/badge";
+import { Button } from "@/components/button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useBookkeeping } from "@/lib/storage";
+import type { Transaction } from "@/lib/types";
+
+const filters = [
+  "All",
+  "Receipt missing",
+  "Receipt linked",
+  "Needs reconciliation",
+  "Reconciled"
+];
 
 export function ReceiptTable() {
   const { transactions, updateTransaction } = useBookkeeping();
-  const receiptTransactions = transactions
-    .filter((transaction) => transaction.receipt_required)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const [filter, setFilter] = useState("Receipt missing");
+  const missingReceipts = useMemo(
+    () =>
+      transactions
+        .filter((transaction) => transaction.receipt_required && !transaction.receipt_link)
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [transactions]
+  );
+  const filteredTransactions = useMemo(() => {
+    return transactions
+      .filter((transaction) => {
+        if (filter === "Receipt missing") {
+          return transaction.receipt_required && !transaction.receipt_link;
+        }
+        if (filter === "Receipt linked") return Boolean(transaction.receipt_link);
+        if (filter === "Needs reconciliation") return !transaction.reconciled;
+        if (filter === "Reconciled") return transaction.reconciled;
+        return true;
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [filter, transactions]);
+
+  function ReceiptStatus({ transaction }: { transaction: Transaction }) {
+    if (transaction.receipt_link) return <Badge tone="green">Receipt linked</Badge>;
+    if (transaction.receipt_required) return <Badge tone="red">Receipt missing</Badge>;
+    return <Badge tone="neutral">Receipt optional</Badge>;
+  }
+
+  function ReconciliationStatus({ transaction }: { transaction: Transaction }) {
+    return (
+      <Badge tone={transaction.reconciled ? "green" : "amber"}>
+        {transaction.reconciled ? "Reconciled" : "Needs reconciliation"}
+      </Badge>
+    );
+  }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-white shadow-soft">
-      <div className="overflow-x-auto">
-        <table className="min-w-full border-collapse">
-          <thead className="table-head">
-            <tr>
-              <th className="px-3 py-3">Date</th>
-              <th className="px-3 py-3">Vendor</th>
-              <th className="px-3 py-3">Category</th>
-              <th className="px-3 py-3 text-right">Amount</th>
-              <th className="px-3 py-3">Receipt</th>
-              <th className="px-3 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {receiptTransactions.map((transaction) => (
-              <tr className="hover:bg-slate-50" key={transaction.id}>
-                <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
-                <td className="table-cell min-w-56">
-                  <p className="font-medium text-ink">{transaction.vendor}</p>
-                  <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
-                </td>
-                <td className="table-cell">{transaction.category}</td>
-                <td className="table-cell text-right font-medium text-coral">
-                  {formatCurrency(transaction.money_out, transaction.currency)}
-                </td>
-                <td className="table-cell min-w-80">
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="form-input"
-                      defaultValue={transaction.receipt_link}
-                      onBlur={(event) =>
-                        updateTransaction(transaction.id, { receipt_link: event.target.value })
-                      }
-                      placeholder="https://..."
-                      type="url"
-                    />
-                    {transaction.receipt_link ? (
-                      <a
-                        aria-label="Open receipt"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-white text-slate-700 hover:bg-slate-50"
-                        href={transaction.receipt_link}
-                        rel="noreferrer"
-                        target="_blank"
-                        title="Open receipt"
-                      >
-                        <ExternalLink aria-hidden="true" className="h-4 w-4" />
-                      </a>
-                    ) : null}
+    <div className="space-y-6">
+      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-normal text-ink">Missing Receipts</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {missingReceipts.length} transaction(s) still need receipt links.
+            </p>
+          </div>
+          <Badge tone={missingReceipts.length ? "red" : "green"}>
+            {missingReceipts.length ? "Action needed" : "All linked"}
+          </Badge>
+        </div>
+        {missingReceipts.length ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {missingReceipts.slice(0, 6).map((transaction) => (
+              <div className="rounded-md border border-red-100 bg-red-50 p-3" key={transaction.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-ink">{transaction.vendor}</p>
+                    <p className="mt-1 text-xs text-slate-600">{transaction.description}</p>
                   </div>
-                </td>
-                <td className="table-cell">
-                  <Badge tone={transaction.receipt_link ? "green" : "red"}>
-                    {transaction.receipt_link ? "Linked" : "Missing"}
-                  </Badge>
-                </td>
-              </tr>
+                  <p className="whitespace-nowrap text-sm font-semibold text-coral">
+                    {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
+                  </p>
+                </div>
+              </div>
             ))}
-            {receiptTransactions.length === 0 ? (
+          </div>
+        ) : null}
+      </section>
+
+      <div className="flex flex-wrap gap-2">
+        {filters.map((item) => (
+          <Button
+            className={filter === item ? "border-marine bg-marine text-white hover:bg-ink" : ""}
+            key={item}
+            onClick={() => setFilter(item)}
+          >
+            {item}
+          </Button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-line bg-white shadow-soft">
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse">
+            <thead className="table-head">
               <tr>
-                <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>
-                  No receipt-required transactions.
-                </td>
+                <th className="px-3 py-3">Date</th>
+                <th className="px-3 py-3">Transaction</th>
+                <th className="px-3 py-3">Category</th>
+                <th className="px-3 py-3 text-right">Amount</th>
+                <th className="px-3 py-3">Receipt Link</th>
+                <th className="px-3 py-3">Status</th>
               </tr>
-            ) : null}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredTransactions.map((transaction) => (
+                <tr className="hover:bg-slate-50" key={transaction.id}>
+                  <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
+                  <td className="table-cell min-w-60">
+                    <p className="font-medium text-ink">{transaction.vendor || "Manual entry"}</p>
+                    <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
+                  </td>
+                  <td className="table-cell min-w-48">{transaction.category}</td>
+                  <td className="table-cell text-right font-medium text-slate-800">
+                    {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
+                  </td>
+                  <td className="table-cell min-w-80">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="form-input"
+                        onChange={(event) =>
+                          updateTransaction(transaction.id, { receipt_link: event.target.value })
+                        }
+                        placeholder="https://..."
+                        type="url"
+                        value={transaction.receipt_link}
+                      />
+                      {transaction.receipt_link ? (
+                        <a
+                          aria-label="Open receipt"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-line bg-white text-slate-700 hover:bg-slate-50"
+                          href={transaction.receipt_link}
+                          rel="noreferrer"
+                          target="_blank"
+                          title="Open receipt"
+                        >
+                          <ExternalLink aria-hidden="true" className="h-4 w-4" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="table-cell min-w-48">
+                    <div className="flex flex-wrap gap-2">
+                      <ReceiptStatus transaction={transaction} />
+                      <ReconciliationStatus transaction={transaction} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>
+                    No transactions match this filter.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

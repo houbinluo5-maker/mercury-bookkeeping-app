@@ -37,6 +37,21 @@ export type AppSettings = {
   default_currency: string;
   default_account: string;
   bookkeeping_method: "cash" | "accrual";
+  business_type_tax_notes: string;
+};
+
+export type LocalBackup = {
+  exported_at: string;
+  version: 1;
+  transactions: Transaction[];
+  categories: Category[];
+  receipts: Array<{
+    transaction_id: string;
+    receipt_required: boolean;
+    receipt_link: string;
+    reconciled: boolean;
+  }>;
+  settings: AppSettings;
 };
 
 export type PeriodSummary = {

@@ -25,6 +25,9 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - Settings stored locally
 - Excel export for transactions, reports, and annual summaries
 - Login/logout gate for private app access
+- Data Management tools for clearing demo data, JSON backup, and JSON restore
+- Transaction editing and deletion with automatic report updates
+- Receipt filters for missing receipts, linked receipts, and reconciliation status
 
 ## Accounting Rules
 
@@ -138,6 +141,50 @@ Transactions include:
 - `notes`
 
 The app also stores a generated `id` and `created_at` timestamp for local UI state.
+
+## Data Management
+
+The current MVP stores data in browser `localStorage`. That means data is private to the browser profile and device being used, but it can be lost if browser storage is cleared. Use Settings -> Data Management regularly.
+
+### Clearing Demo Data
+
+1. Open Settings.
+2. Go to Data Management.
+3. Select `Clear transactions`.
+4. Confirm the modal.
+
+This removes all locally stored transactions in the current browser, including demo seed transactions and any manual entries.
+
+### Backing Up Data
+
+1. Open Settings.
+2. Select `Download backup`.
+3. Keep the exported JSON file somewhere private and secure.
+
+The JSON backup includes transactions, categories, receipt status/link data, and company settings.
+
+### Restoring Data
+
+1. Open Settings.
+2. Select `Restore backup`.
+3. Choose a JSON file previously exported from this app.
+
+Restoring replaces the local transactions, categories, and settings in the current browser. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
+
+## Editing Transactions
+
+Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Deleting a transaction asks for confirmation first.
+
+Dashboard totals, monthly reports, quarterly reports, annual tax summary, receipts, and transaction exports read from the same localStorage data, so edits and deletes update those views automatically.
+
+## Receipt Links And Reconciliation
+
+Use the Receipts page to add or update receipt links. Good support documents include Meta invoices, Shopify invoices, supplier invoices, shipping bills, domain or hosting invoices, bank statements, and payment confirmations.
+
+- `Receipt missing`: the transaction requires a receipt, but `receipt_link` is empty.
+- `Receipt linked`: a receipt URL is present.
+- `Needs reconciliation`: the transaction is not marked reconciled yet, commonly used for Shopify payouts or ad invoices that need matching against source reports.
+- `Reconciled`: the transaction has been reviewed against its source documentation.
 
 ## Future Supabase Integration
 
