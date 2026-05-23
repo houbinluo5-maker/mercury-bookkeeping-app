@@ -9,12 +9,20 @@ import {
   useState
 } from "react";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
-import type { AppSettings, Category, LocalBackup, Transaction, TransactionDraft } from "@/lib/types";
+import type {
+  AppSettings,
+  Category,
+  LocalBackup,
+  StorageStatus,
+  Transaction,
+  TransactionDraft
+} from "@/lib/types";
 
 type BookkeepingContextValue = {
   transactions: Transaction[];
   settings: AppSettings;
   categories: Category[];
+  storageStatus: StorageStatus;
   addTransaction: (transaction: TransactionDraft) => Transaction;
   updateTransaction: (id: string, transaction: Partial<TransactionDraft>) => void;
   deleteTransaction: (id: string) => void;
@@ -23,11 +31,34 @@ type BookkeepingContextValue = {
   resetDemoData: () => void;
   exportBackup: () => LocalBackup;
   importBackup: (backup: LocalBackup) => void;
+  syncToSupabase: () => Promise<boolean>;
+  loadFromSupabase: () => Promise<boolean>;
+  migrateLocalDataToSupabase: () => Promise<boolean>;
+};
+
+type StorageApiResponse = {
+  configured: boolean;
+  data?: LocalBackup;
+  error?: string;
+  message?: string;
+  mode: StorageStatus["mode"];
 };
 
 const TRANSACTIONS_KEY = "mercury-bookkeeping-transactions";
 const SETTINGS_KEY = "mercury-bookkeeping-settings";
 const CATEGORIES_KEY = "mercury-bookkeeping-categories";
+
+const localStorageStatus: StorageStatus = {
+  configured: false,
+  mode: "local",
+  message: "Supabase is not configured. Using browser localStorage."
+};
+
+const checkingStorageStatus: StorageStatus = {
+  configured: false,
+  mode: "checking",
+  message: "Checking storage configuration."
+};
 
 const BookkeepingContext = createContext<BookkeepingContextValue | null>(null);
 
@@ -50,21 +81,93 @@ function createId() {
   return `txn-${Date.now()}`;
 }
 
-function normalizeSettings(settings: Partial<AppSettings>): AppSettings {
+function normalizeSettings(settings: Partial<AppSettings> | null | undefined): AppSettings {
   return {
     ...defaultSettings,
     ...settings
   };
 }
 
-function normalizeBackup(backup: LocalBackup): LocalBackup {
+function normalizeTransaction(transaction: Partial<Transaction>): Transaction {
+  const createdAt = transaction.created_at || new Date().toISOString();
+
+  return {
+    id: String(transaction.id ?? createId()),
+    date: String(transaction.date ?? ""),
+    account: String(transaction.account ?? defaultSettings.default_account),
+    source: String(transaction.source ?? "Manual"),
+    vendor: String(transaction.vendor ?? ""),
+    description: String(transaction.description ?? ""),
+    currency: String(transaction.currency ?? defaultSettings.default_currency),
+    money_in: Number(transaction.money_in ?? 0),
+    money_out: Number(transaction.money_out ?? 0),
+    category: String(transaction.category ?? "Uncategorized"),
+    tax_line: String(transaction.tax_line ?? "Needs review"),
+    receipt_required: Boolean(transaction.receipt_required ?? true),
+    receipt_link: String(transaction.receipt_link ?? ""),
+    reconciled: Boolean(transaction.reconciled ?? false),
+    notes: String(transaction.notes ?? ""),
+    created_at: createdAt,
+    updated_at: transaction.updated_at || createdAt
+  };
+}
+
+function normalizeCategories(nextCategories: unknown): Category[] {
+  if (!Array.isArray(nextCategories)) return categories;
+
+  return nextCategories.map((category) => {
+    const item = category as Partial<Category>;
+
+    return {
+      id: String(item.id ?? ""),
+      name: String(item.name ?? ""),
+      type: item.type ?? "Expense",
+      tax_line: String(item.tax_line ?? "Needs review"),
+      receipt_required_default: Boolean(item.receipt_required_default ?? true),
+      description: String(item.description ?? "")
+    };
+  });
+}
+
+function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
+  const transactions = Array.isArray(backup.transactions)
+    ? backup.transactions.map((transaction) => normalizeTransaction(transaction))
+    : [];
+
   return {
     exported_at: backup.exported_at || new Date().toISOString(),
     version: 1,
-    transactions: Array.isArray(backup.transactions) ? backup.transactions : [],
-    categories: Array.isArray(backup.categories) ? backup.categories : categories,
-    receipts: Array.isArray(backup.receipts) ? backup.receipts : [],
-    settings: normalizeSettings(backup.settings ?? defaultSettings)
+    transactions,
+    categories: normalizeCategories(backup.categories),
+    receipts: Array.isArray(backup.receipts)
+      ? backup.receipts
+      : transactions.map((transaction) => ({
+          transaction_id: transaction.id,
+          receipt_required: transaction.receipt_required,
+          receipt_link: transaction.receipt_link,
+          reconciled: transaction.reconciled
+        })),
+    settings: normalizeSettings(backup.settings)
+  };
+}
+
+function createBackup(
+  transactions: Transaction[],
+  categoryState: Category[],
+  settings: AppSettings
+): LocalBackup {
+  return {
+    exported_at: new Date().toISOString(),
+    version: 1,
+    transactions,
+    categories: categoryState,
+    receipts: transactions.map((transaction) => ({
+      transaction_id: transaction.id,
+      receipt_required: transaction.receipt_required,
+      receipt_link: transaction.receipt_link,
+      reconciled: transaction.reconciled
+    })),
+    settings
   };
 }
 
@@ -72,18 +175,122 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [categoryState, setCategoryState] = useState<Category[]>(categories);
+  const [storageStatus, setStorageStatus] = useState<StorageStatus>(checkingStorageStatus);
   const [loaded, setLoaded] = useState(false);
+
+  const applyBackup = useCallback((backup: Partial<LocalBackup>) => {
+    const normalized = normalizeBackup(backup);
+
+    setTransactions(normalized.transactions.sort((a, b) => b.date.localeCompare(a.date)));
+    setCategoryState(normalized.categories);
+    setSettings(normalized.settings);
+
+    return normalized;
+  }, []);
+
+  const requestStorage = useCallback(
+    async (method: "GET" | "PUT", backup?: LocalBackup): Promise<StorageApiResponse> => {
+      const response = await fetch("/api/storage", {
+        method,
+        headers: backup ? { "Content-Type": "application/json" } : undefined,
+        body: backup ? JSON.stringify(backup) : undefined
+      });
+      const result = (await response.json()) as StorageApiResponse;
+
+      if (!response.ok) {
+        throw new Error(result.error || result.message || "Storage request failed.");
+      }
+
+      return result;
+    },
+    []
+  );
+
+  const loadFromSupabase = useCallback(async () => {
+    try {
+      const result = await requestStorage("GET");
+
+      if (!result.configured) {
+        setStorageStatus(localStorageStatus);
+        return false;
+      }
+
+      if (result.data) {
+        applyBackup(result.data);
+      }
+
+      setStorageStatus({
+        configured: true,
+        mode: "supabase",
+        message: result.message || "Supabase connected."
+      });
+      return true;
+    } catch (error) {
+      setStorageStatus({
+        configured: true,
+        mode: "error",
+        message: error instanceof Error ? error.message : "Supabase request failed."
+      });
+      return false;
+    }
+  }, [applyBackup, requestStorage]);
+
+  const sendBackupToSupabase = useCallback(
+    async (backup: LocalBackup) => {
+      try {
+        const result = await requestStorage("PUT", backup);
+
+        if (!result.configured) {
+          setStorageStatus(localStorageStatus);
+          return false;
+        }
+
+        if (result.data) {
+          applyBackup(result.data);
+        }
+
+        setStorageStatus({
+          configured: true,
+          mode: "supabase",
+          message: result.message || "Supabase synced."
+        });
+        return true;
+      } catch (error) {
+        setStorageStatus({
+          configured: true,
+          mode: "error",
+          message: error instanceof Error ? error.message : "Supabase sync failed."
+        });
+        return false;
+      }
+    },
+    [applyBackup, requestStorage]
+  );
+
+  const maybeSyncToSupabase = useCallback(
+    (backup: LocalBackup) => {
+      if (storageStatus.configured && storageStatus.mode === "supabase") {
+        void sendBackupToSupabase(backup);
+      }
+    },
+    [sendBackupToSupabase, storageStatus.configured, storageStatus.mode]
+  );
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setTransactions(loadJson(TRANSACTIONS_KEY, seedTransactions));
-      setSettings(normalizeSettings(loadJson(SETTINGS_KEY, defaultSettings)));
-      setCategoryState(loadJson(CATEGORIES_KEY, categories));
+      const localBackup = normalizeBackup({
+        transactions: loadJson(TRANSACTIONS_KEY, seedTransactions),
+        settings: loadJson(SETTINGS_KEY, defaultSettings),
+        categories: loadJson(CATEGORIES_KEY, categories)
+      });
+
+      applyBackup(localBackup);
       setLoaded(true);
+      void loadFromSupabase();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [applyBackup, loadFromSupabase]);
 
   useEffect(() => {
     if (loaded) {
@@ -103,75 +310,106 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     }
   }, [categoryState, loaded]);
 
-  const addTransaction = useCallback((draft: TransactionDraft) => {
-    const transaction: Transaction = {
-      ...draft,
-      id: createId(),
-      created_at: new Date().toISOString()
-    };
+  const syncToSupabase = useCallback(async () => {
+    return sendBackupToSupabase(createBackup(transactions, categoryState, settings));
+  }, [categoryState, sendBackupToSupabase, settings, transactions]);
 
-    setTransactions((current) =>
-      [transaction, ...current].sort((a, b) => b.date.localeCompare(a.date))
-    );
+  const migrateLocalDataToSupabase = useCallback(async () => {
+    const localBackup = normalizeBackup({
+      transactions: loadJson(TRANSACTIONS_KEY, transactions),
+      settings: loadJson(SETTINGS_KEY, settings),
+      categories: loadJson(CATEGORIES_KEY, categoryState)
+    });
 
-    return transaction;
-  }, []);
+    return sendBackupToSupabase(localBackup);
+  }, [categoryState, sendBackupToSupabase, settings, transactions]);
 
-  const updateTransaction = useCallback((id: string, draft: Partial<TransactionDraft>) => {
-    setTransactions((current) =>
-      current.map((transaction) =>
-        transaction.id === id ? { ...transaction, ...draft } : transaction
-      )
-    );
-  }, []);
+  const addTransaction = useCallback(
+    (draft: TransactionDraft) => {
+      const now = new Date().toISOString();
+      const transaction: Transaction = {
+        ...draft,
+        id: createId(),
+        created_at: now,
+        updated_at: now
+      };
+      const nextTransactions = [transaction, ...transactions].sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
 
-  const deleteTransaction = useCallback((id: string) => {
-    setTransactions((current) => current.filter((transaction) => transaction.id !== id));
-  }, []);
+      setTransactions(nextTransactions);
+      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
 
-  const updateSettings = useCallback((nextSettings: AppSettings) => {
-    setSettings(normalizeSettings(nextSettings));
-  }, []);
+      return transaction;
+    },
+    [categoryState, maybeSyncToSupabase, settings, transactions]
+  );
+
+  const updateTransaction = useCallback(
+    (id: string, draft: Partial<TransactionDraft>) => {
+      const nextTransactions = transactions.map((transaction) =>
+        transaction.id === id
+          ? { ...transaction, ...draft, updated_at: new Date().toISOString() }
+          : transaction
+      );
+
+      setTransactions(nextTransactions);
+      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+    },
+    [categoryState, maybeSyncToSupabase, settings, transactions]
+  );
+
+  const deleteTransaction = useCallback(
+    (id: string) => {
+      const nextTransactions = transactions.filter((transaction) => transaction.id !== id);
+
+      setTransactions(nextTransactions);
+      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+    },
+    [categoryState, maybeSyncToSupabase, settings, transactions]
+  );
+
+  const updateSettings = useCallback(
+    (nextSettings: AppSettings) => {
+      const normalized = normalizeSettings(nextSettings);
+
+      setSettings(normalized);
+      maybeSyncToSupabase(createBackup(transactions, categoryState, normalized));
+    },
+    [categoryState, maybeSyncToSupabase, transactions]
+  );
 
   const clearTransactions = useCallback(() => {
     setTransactions([]);
-  }, []);
+    maybeSyncToSupabase(createBackup([], categoryState, settings));
+  }, [categoryState, maybeSyncToSupabase, settings]);
 
   const resetDemoData = useCallback(() => {
     setTransactions(seedTransactions);
     setSettings(defaultSettings);
     setCategoryState(categories);
-  }, []);
+    maybeSyncToSupabase(createBackup(seedTransactions, categories, defaultSettings));
+  }, [maybeSyncToSupabase]);
 
   const exportBackup = useCallback<() => LocalBackup>(() => {
-    return {
-      exported_at: new Date().toISOString(),
-      version: 1,
-      transactions,
-      categories: categoryState,
-      receipts: transactions.map((transaction) => ({
-        transaction_id: transaction.id,
-        receipt_required: transaction.receipt_required,
-        receipt_link: transaction.receipt_link,
-        reconciled: transaction.reconciled
-      })),
-      settings
-    };
+    return createBackup(transactions, categoryState, settings);
   }, [categoryState, settings, transactions]);
 
-  const importBackup = useCallback((backup: LocalBackup) => {
-    const normalized = normalizeBackup(backup);
+  const importBackup = useCallback(
+    (backup: LocalBackup) => {
+      const normalized = applyBackup(backup);
 
-    setTransactions(normalized.transactions);
-    setCategoryState(normalized.categories);
-    setSettings(normalized.settings);
-  }, []);
+      maybeSyncToSupabase(normalized);
+    },
+    [applyBackup, maybeSyncToSupabase]
+  );
 
   const value = useMemo<BookkeepingContextValue>(
     () => ({
       transactions,
       settings,
       categories: categoryState,
+      storageStatus,
       addTransaction,
       updateTransaction,
       deleteTransaction,
@@ -179,7 +417,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       clearTransactions,
       resetDemoData,
       exportBackup,
-      importBackup
+      importBackup,
+      syncToSupabase,
+      loadFromSupabase,
+      migrateLocalDataToSupabase
     }),
     [
       addTransaction,
@@ -188,8 +429,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       deleteTransaction,
       exportBackup,
       importBackup,
+      loadFromSupabase,
+      migrateLocalDataToSupabase,
       resetDemoData,
       settings,
+      storageStatus,
+      syncToSupabase,
       transactions,
       updateSettings,
       updateTransaction

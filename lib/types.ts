@@ -18,9 +18,10 @@ export type Transaction = {
   reconciled: boolean;
   notes: string;
   created_at: string;
+  updated_at?: string;
 };
 
-export type TransactionDraft = Omit<Transaction, "id" | "created_at">;
+export type TransactionDraft = Omit<Transaction, "id" | "created_at" | "updated_at">;
 
 export type Category = {
   id: string;
@@ -54,6 +55,14 @@ export type LocalBackup = {
     reconciled: boolean;
   }>;
   settings: AppSettings;
+};
+
+export type StorageMode = "checking" | "local" | "supabase" | "error";
+
+export type StorageStatus = {
+  configured: boolean;
+  mode: StorageMode;
+  message: string;
 };
 
 export type PeriodSummary = {
