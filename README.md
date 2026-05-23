@@ -7,6 +7,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - Next.js App Router
 - TypeScript
 - Tailwind CSS
+- Simple admin-password cookie auth for MVP private access
 - Browser-side Excel-compatible `.xls` export
 - Local seed data in `lib/seed-data.ts`
 
@@ -23,6 +24,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The first version is ma
 - Annual Tax Summary grouped by tax line and category
 - Settings stored locally
 - Excel export for transactions, reports, and annual summaries
+- Login/logout gate for private app access
 
 ## Accounting Rules
 
@@ -57,6 +59,20 @@ The parser extracts date, amount, currency, direction, vendor, source, descripti
 
 ## Getting Started
 
+Create a local environment file first:
+
+```bash
+cp .env.example .env.local
+```
+
+Set an admin password:
+
+```bash
+ADMIN_PASSWORD=choose-a-long-private-password
+```
+
+If `ADMIN_PASSWORD` is missing, the login page shows a setup warning in development and protected pages redirect to `/login`.
+
 ```bash
 npm install
 npm run dev
@@ -68,8 +84,21 @@ Useful checks:
 
 ```bash
 npm run typecheck
+npm run lint
 npm run build
+npm audit
 ```
+
+## MVP Private Access
+
+This app uses a deliberately simple MVP auth layer for private deployment:
+
+- `/login` validates the submitted password against server-side `ADMIN_PASSWORD`.
+- Successful login sets an HTTP-only cookie.
+- Middleware requires that cookie before accessing Dashboard, Transactions, Reports, Receipts, Accounts, and Settings.
+- The sidebar and mobile header include a logout button.
+
+This is not a full user management system. Supabase auth is intentionally not enabled yet; future production auth can replace this layer when multi-user access, password reset, roles, and audit trails are needed.
 
 ## Folder Structure
 
