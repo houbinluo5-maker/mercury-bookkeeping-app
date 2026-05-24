@@ -117,7 +117,11 @@ export default function MercuryImportPage() {
   function handleImport() {
     if (!selectedRows.length) return;
 
-    importTransactions(selectedRows.map((row) => mercuryImportRowToDraft(row)));
+    importTransactions(selectedRows.map((row) => mercuryImportRowToDraft(row)), {
+      actor: "system",
+      reason: `Mercury CSV import: ${selectedRows.length} selected row(s), ${rows.length} parsed row(s).`,
+      source: "csv_import"
+    });
     setImportSummary({
       importedRows: selectedRows.length,
       rowsNeedingReview: selectedRows.filter(

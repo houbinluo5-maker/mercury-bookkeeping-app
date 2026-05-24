@@ -1,5 +1,29 @@
 export type CategoryType = "Revenue" | "COGS" | "Expense" | "Equity" | "Transfer";
 export type Language = "en" | "zh";
+export type AuditEntityType =
+  | "transaction"
+  | "receipt"
+  | "settings"
+  | "category"
+  | "reconciliation";
+export type AuditActor = "admin" | "system";
+export type AuditSource = "manual" | "import" | "system" | "csv_import" | "receipt_upload";
+export type AuditAction =
+  | "create"
+  | "update"
+  | "delete"
+  | "upload_receipt"
+  | "replace_receipt"
+  | "delete_receipt"
+  | "manual_link_receipt"
+  | "mark_reconciled"
+  | "mark_unreconciled"
+  | "mark_receipt_not_required"
+  | "category_change"
+  | "tax_line_change"
+  | "resolve_review"
+  | "dismiss_duplicate"
+  | "note_change";
 
 export type Transaction = {
   id: string;
@@ -43,9 +67,23 @@ export type AppSettings = {
   language: Language;
 };
 
+export type AuditLog = {
+  id: string;
+  entity_type: AuditEntityType;
+  entity_id: string;
+  action: AuditAction;
+  field_name: string;
+  old_value: string;
+  new_value: string;
+  reason: string;
+  created_at: string;
+  actor: AuditActor;
+  source: AuditSource;
+};
+
 export type LocalBackup = {
   exported_at: string;
-  version: 1;
+  version: 1 | 2;
   transactions: Transaction[];
   categories: Category[];
   receipts: Array<{
@@ -54,6 +92,7 @@ export type LocalBackup = {
     receipt_link: string;
     reconciled: boolean;
   }>;
+  audit_logs: AuditLog[];
   settings: AppSettings;
 };
 

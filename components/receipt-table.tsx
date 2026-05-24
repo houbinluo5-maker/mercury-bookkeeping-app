@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
+import { promptOptionalAuditReason } from "@/lib/audit-reason";
 import { isExpenseReceiptCategory } from "@/lib/receipt-requirements";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
@@ -20,9 +22,10 @@ const filters = [
 ];
 
 export function ReceiptTable() {
-  const { categories, transactions, updateTransaction } = useBookkeeping();
+  const { auditLogs, categories, transactions, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [filter, setFilter] = useState("receiptMissing");
+  const [receiptDrafts, setReceiptDrafts] = useState<Record<string, string>>({});
   const categoryByName = useMemo(
     () => new Map(categories.map((category) => [category.name, category])),
     [categories]
@@ -68,6 +71,38 @@ export function ReceiptTable() {
     );
   }
 
+  function receiptInputValue(transaction: Transaction) {
+    return receiptDrafts[transaction.id] ?? transaction.receipt_link;
+  }
+
+  function commitReceiptLink(transaction: Transaction) {
+    const nextValue = receiptInputValue(transaction).trim();
+
+    if (nextValue === transaction.receipt_link) return;
+
+    let reason = "";
+
+    if (transaction.receipt_link && !nextValue) {
+      const response = promptOptionalAuditReason(t, t("deleteReceipt"));
+
+      if (response === null) {
+        setReceiptDrafts((current) => ({ ...current, [transaction.id]: transaction.receipt_link }));
+        return;
+      }
+
+      reason = response;
+    }
+
+    updateTransaction(
+      transaction.id,
+      { receipt_link: nextValue },
+      {
+        reason,
+        source: "manual"
+      }
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
@@ -98,8 +133,16 @@ export function ReceiptTable() {
                 <div className="mt-3">
                   <ReceiptUploadControl
                     compact
-                    onReceiptLinkChange={(receiptLink) =>
-                      updateTransaction(transaction.id, { receipt_link: receiptLink })
+                    onReceiptLinkChange={(receiptLink, audit) =>
+                      updateTransaction(
+                        transaction.id,
+                        { receipt_link: receiptLink },
+                        {
+                          actionsByField: audit?.action ? { receipt_link: audit.action } : undefined,
+                          reason: audit?.reason,
+                          source: audit?.source ?? "receipt_upload"
+                        }
+                      )
                     }
                     receiptLink={transaction.receipt_link}
                     receiptRequired={transaction.receipt_required}
@@ -138,47 +181,83 @@ export function ReceiptTable() {
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map((transaction) => (
-                <tr className="hover:bg-slate-50" key={transaction.id}>
-                  <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
-                  <td className="table-cell min-w-60">
-                    <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>
-                    <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
-                  </td>
-                  <td className="table-cell min-w-48">{categoryLabel(transaction.category)}</td>
-                  <td className="table-cell text-right font-medium text-slate-800">
-                    {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
-                  </td>
-                  <td className="table-cell min-w-80">
-                    <div className="space-y-2">
-                      <input
-                        className="form-input"
-                        onChange={(event) =>
-                          updateTransaction(transaction.id, { receipt_link: event.target.value })
-                        }
-                        placeholder={t("receiptLinkPlaceholder")}
-                        type="text"
-                        value={transaction.receipt_link}
-                      />
-                      <ReceiptUploadControl
-                        compact
-                        onReceiptLinkChange={(receiptLink) =>
-                          updateTransaction(transaction.id, { receipt_link: receiptLink })
-                        }
-                        receiptLink={transaction.receipt_link}
-                        receiptRequired={transaction.receipt_required}
-                        transactionId={transaction.id}
-                      />
-                    </div>
-                  </td>
-                  <td className="table-cell min-w-48">
-                    <div className="flex flex-wrap gap-2">
-                      <ReceiptStatus transaction={transaction} />
-                      <ReconciliationStatus transaction={transaction} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredTransactions.map((transaction) => {
+                const transactionAuditLogs = auditLogs.filter(
+                  (entry) => entry.entity_id === transaction.id
+                );
+
+                return (
+                  <tr className="hover:bg-slate-50" key={transaction.id}>
+                    <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
+                    <td className="table-cell min-w-60">
+                      <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>
+                      <p className="mt-1 text-xs text-slate-500">{transaction.description}</p>
+                    </td>
+                    <td className="table-cell min-w-48">{categoryLabel(transaction.category)}</td>
+                    <td className="table-cell text-right font-medium text-slate-800">
+                      {formatCurrency(transaction.money_out || transaction.money_in, transaction.currency)}
+                    </td>
+                    <td className="table-cell min-w-[24rem]">
+                      <div className="space-y-3">
+                        <input
+                          className="form-input"
+                          onBlur={() => commitReceiptLink(transaction)}
+                          onChange={(event) =>
+                            setReceiptDrafts((current) => ({
+                              ...current,
+                              [transaction.id]: event.target.value
+                            }))
+                          }
+                          placeholder={t("receiptLinkPlaceholder")}
+                          type="text"
+                          value={receiptInputValue(transaction)}
+                        />
+                        <ReceiptUploadControl
+                          compact
+                          onReceiptLinkChange={(receiptLink, audit) => {
+                            setReceiptDrafts((current) => ({
+                              ...current,
+                              [transaction.id]: receiptLink
+                            }));
+                            updateTransaction(
+                              transaction.id,
+                              { receipt_link: receiptLink },
+                              {
+                                actionsByField: audit?.action
+                                  ? { receipt_link: audit.action }
+                                  : undefined,
+                                reason: audit?.reason,
+                                source: audit?.source ?? "receipt_upload"
+                              }
+                            );
+                          }}
+                          receiptLink={transaction.receipt_link}
+                          receiptRequired={transaction.receipt_required}
+                          transactionId={transaction.id}
+                        />
+                        <details>
+                          <summary className="cursor-pointer text-sm font-medium text-marine">
+                            {t("auditHistory")}
+                          </summary>
+                          <div className="mt-3">
+                            <AuditHistoryPanel
+                              emptyLabel={t("noAuditEntries")}
+                              entries={transactionAuditLogs}
+                              limit={6}
+                            />
+                          </div>
+                        </details>
+                      </div>
+                    </td>
+                    <td className="table-cell min-w-48">
+                      <div className="flex flex-wrap gap-2">
+                        <ReceiptStatus transaction={transaction} />
+                        <ReconciliationStatus transaction={transaction} />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>

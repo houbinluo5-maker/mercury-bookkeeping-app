@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, Download, Edit3, Trash2 } from "lucide-react";
+import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
+import { promptOptionalAuditReason } from "@/lib/audit-reason";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -28,7 +30,7 @@ import {
 } from "@/lib/reconciliation";
 import { downloadCsv } from "@/lib/tax-package";
 import { useBookkeeping } from "@/lib/storage";
-import type { Category, Transaction, TransactionDraft } from "@/lib/types";
+import type { AuditLog, Category, Transaction, TransactionDraft } from "@/lib/types";
 
 function defaultYearStart(year: number) {
   return `${year}-01-01`;
@@ -119,6 +121,7 @@ function EmptySection({ label }: { label: string }) {
 }
 
 function TransactionIssueRow({
+  auditEntries,
   categoryLabel,
   categories,
   issue,
@@ -135,6 +138,7 @@ function TransactionIssueRow({
   t,
   taxLineLabel
 }: {
+  auditEntries: AuditLog[];
   categoryLabel: (value: string) => string;
   categories: Category[];
   issue: TransactionIssue;
@@ -143,7 +147,15 @@ function TransactionIssueRow({
   onMarkReceiptNotRequired?: (transaction: Transaction) => void;
   onMarkReconciled?: (transaction: Transaction) => void;
   onOpenTransaction: (transaction: Transaction) => void;
-  onReceiptLinkChange?: (transaction: Transaction, receiptLink: string) => void;
+  onReceiptLinkChange?: (
+    transaction: Transaction,
+    receiptLink: string,
+    audit?: {
+      action?: "delete_receipt" | "replace_receipt" | "upload_receipt";
+      reason?: string;
+      source?: "receipt_upload";
+    }
+  ) => void;
   onResolveReview?: (transaction: Transaction) => void;
   showCategorySelect?: boolean;
   showReceiptUpload?: boolean;
@@ -228,8 +240,8 @@ function TransactionIssueRow({
               <p className="mb-2 text-sm font-medium text-slate-700">{t("uploadReceipt")}</p>
               <ReceiptUploadControl
                 compact
-                onReceiptLinkChange={(receiptLink) =>
-                  onReceiptLinkChange?.(issue.transaction, receiptLink)
+                onReceiptLinkChange={(receiptLink, audit) =>
+                  onReceiptLinkChange?.(issue.transaction, receiptLink, audit)
                 }
                 receiptLink={issue.transaction.receipt_link}
                 receiptRequired={issue.transaction.receipt_required}
@@ -239,17 +251,29 @@ function TransactionIssueRow({
           ) : null}
         </div>
       </div>
+      <div className="mt-4">
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-marine">
+            {t("auditHistory")}
+          </summary>
+          <div className="mt-3">
+            <AuditHistoryPanel emptyLabel={t("noAuditEntries")} entries={auditEntries} limit={6} />
+          </div>
+        </details>
+      </div>
     </article>
   );
 }
 
 function DuplicateCandidateRow({
+  auditEntries,
   candidate,
   onDeleteDuplicate,
   onMarkNotDuplicate,
   onOpenTransaction,
   t
 }: {
+  auditEntries: AuditLog[];
   candidate: DuplicateCandidate;
   onDeleteDuplicate: (candidate: DuplicateCandidate) => void;
   onMarkNotDuplicate: (candidate: DuplicateCandidate) => void;
@@ -302,6 +326,14 @@ function DuplicateCandidateRow({
         <div>
           <Button onClick={() => onMarkNotDuplicate(candidate)}>{t("markNotDuplicate")}</Button>
         </div>
+        <details>
+          <summary className="cursor-pointer text-sm font-medium text-marine">
+            {t("auditHistory")}
+          </summary>
+          <div className="mt-3">
+            <AuditHistoryPanel emptyLabel={t("noAuditEntries")} entries={auditEntries} limit={8} />
+          </div>
+        </details>
       </div>
     </article>
   );
@@ -338,6 +370,7 @@ function IssueSection({
 
 export default function ReconciliationPage() {
   const {
+    auditLogs,
     bulkUpdateTransactions,
     categories,
     deleteTransaction,
@@ -395,6 +428,10 @@ export default function ReconciliationPage() {
   );
 
   function updateCategory(transaction: Transaction, categoryName: string) {
+    const reason = promptOptionalAuditReason(t, t("category"));
+
+    if (reason === null) return;
+
     const nextCategory = categoriesByName.get(categoryName);
     const patch: Partial<TransactionDraft> = {
       category: categoryName,
@@ -416,21 +453,54 @@ export default function ReconciliationPage() {
       patch.receipt_required = nextCategory.receipt_required_default;
     }
 
-    updateTransaction(transaction.id, patch);
+    updateTransaction(transaction.id, patch, {
+      reason,
+      source: "manual"
+    });
   }
 
   function addNote(transaction: Transaction) {
     const nextNotes = window.prompt(t("editNotePrompt"), transaction.notes);
     if (nextNotes === null) return;
-    updateTransaction(transaction.id, { notes: nextNotes });
+    updateTransaction(
+      transaction.id,
+      { notes: nextNotes },
+      {
+        actionsByField: { notes: "note_change" },
+        entityTypesByField: { notes: "reconciliation" },
+        source: "manual"
+      }
+    );
   }
 
   function markReceiptNotRequired(transaction: Transaction) {
-    updateTransaction(transaction.id, { receipt_required: false });
+    const reason = promptOptionalAuditReason(t, t("markReceiptNotRequired"));
+
+    if (reason === null) return;
+
+    updateTransaction(
+      transaction.id,
+      { receipt_required: false },
+      {
+        reason,
+        source: "manual"
+      }
+    );
   }
 
   function markReconciled(transaction: Transaction) {
-    updateTransaction(transaction.id, { reconciled: true });
+    const reason = promptOptionalAuditReason(t, t("markReconciled"));
+
+    if (reason === null) return;
+
+    updateTransaction(
+      transaction.id,
+      { reconciled: true },
+      {
+        reason,
+        source: "manual"
+      }
+    );
   }
 
   function markReviewResolved(transaction: Transaction) {
@@ -443,11 +513,36 @@ export default function ReconciliationPage() {
       patch.tax_line = nextCategory?.tax_line ?? transaction.tax_line;
     }
 
-    updateTransaction(transaction.id, patch);
+    updateTransaction(transaction.id, patch, {
+      extraEntries: [
+        {
+          action: "resolve_review",
+          entity_id: transaction.id,
+          entity_type: "reconciliation",
+          field_name: "review_status",
+          new_value: "resolved",
+          old_value: "needs review",
+          source: "manual"
+        }
+      ],
+      source: "manual"
+    });
   }
 
-  function updateReceiptLink(transaction: Transaction, receiptLink: string) {
-    updateTransaction(transaction.id, { receipt_link: receiptLink });
+  function updateReceiptLink(
+    transaction: Transaction,
+    receiptLink: string,
+    audit?: { action?: "delete_receipt" | "replace_receipt" | "upload_receipt"; reason?: string; source?: "receipt_upload" }
+  ) {
+    updateTransaction(
+      transaction.id,
+      { receipt_link: receiptLink },
+      {
+        actionsByField: audit?.action ? { receipt_link: audit.action } : undefined,
+        reason: audit?.reason,
+        source: audit?.source ?? "receipt_upload"
+      }
+    );
   }
 
   function markNotDuplicate(candidate: DuplicateCandidate) {
@@ -460,6 +555,22 @@ export default function ReconciliationPage() {
             candidate.first.id,
             candidate.second.id
           )
+        },
+        audit: {
+          actionsByField: { notes: "note_change" },
+          entityTypesByField: { notes: "reconciliation" },
+          extraEntries: [
+            {
+              action: "dismiss_duplicate",
+              entity_id: candidate.first.id,
+              entity_type: "reconciliation",
+              field_name: "duplicate_status",
+              new_value: "dismissed",
+              old_value: "possible_duplicate",
+              source: "manual"
+            }
+          ],
+          source: "manual"
         }
       },
       {
@@ -470,6 +581,22 @@ export default function ReconciliationPage() {
             candidate.first.id,
             candidate.second.id
           )
+        },
+        audit: {
+          actionsByField: { notes: "note_change" },
+          entityTypesByField: { notes: "reconciliation" },
+          extraEntries: [
+            {
+              action: "dismiss_duplicate",
+              entity_id: candidate.second.id,
+              entity_type: "reconciliation",
+              field_name: "duplicate_status",
+              new_value: "dismissed",
+              old_value: "possible_duplicate",
+              source: "manual"
+            }
+          ],
+          source: "manual"
         }
       }
     ]);
@@ -484,7 +611,11 @@ export default function ReconciliationPage() {
         )
       )
     ) {
-      deleteTransaction(candidate.second.id);
+      const reason = promptOptionalAuditReason(t, t("deleteDuplicate"));
+
+      if (reason === null) return;
+
+      deleteTransaction(candidate.second.id, { reason, source: "manual" });
     }
   }
 
@@ -856,6 +987,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.missingReceipts.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -887,6 +1019,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.needsReview.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -918,6 +1051,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.uncategorizedTransactions.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -947,6 +1081,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.unreconciledTransactions.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -976,6 +1111,10 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.duplicateCandidates.map((candidate) => (
                 <DuplicateCandidateRow
+                  auditEntries={auditLogs.filter(
+                    (entry) =>
+                      entry.entity_id === candidate.first.id || entry.entity_id === candidate.second.id
+                  )}
                   candidate={candidate}
                   key={candidate.id}
                   onDeleteDuplicate={deleteDuplicate}
@@ -1001,6 +1140,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.revenueDeposits.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -1031,6 +1171,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.expensePayments.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -1063,6 +1204,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.ownerActivity.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -1093,6 +1235,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.internalTransfers.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -1123,6 +1266,7 @@ export default function ReconciliationPage() {
             <div className="space-y-3">
               {reconciliationData.taxPackageIssues.map((issue) => (
                 <TransactionIssueRow
+                  auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
                   issue={issue}
@@ -1144,6 +1288,7 @@ export default function ReconciliationPage() {
       ) : null}
 
       <TransactionEditModal
+        key={editingTransaction?.id ?? "reconciliation-transaction-edit-modal"}
         onClose={() => setEditingTransactionId(null)}
         transaction={editingTransaction}
       />

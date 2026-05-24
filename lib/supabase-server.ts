@@ -1,9 +1,10 @@
+import { normalizeAuditLogs } from "@/lib/audit";
 import { categories as seedCategories, defaultSettings } from "@/lib/seed-data";
 import {
   getReceiptRequiredDefault,
   normalizeCategoryReceiptDefault
 } from "@/lib/receipt-requirements";
-import type { AppSettings, Category, LocalBackup, Transaction } from "@/lib/types";
+import type { AppSettings, AuditLog, Category, LocalBackup, Transaction } from "@/lib/types";
 
 type SupabaseConfig = {
   serviceRoleKey: string;
@@ -28,6 +29,8 @@ type ReceiptRow = {
   receipt_link: string;
   reconciled: boolean;
 };
+
+type AuditLogRow = AuditLog;
 
 type SupabaseErrorBody = {
   code?: string;
@@ -123,7 +126,7 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
 
   return {
     exported_at: backup.exported_at || new Date().toISOString(),
-    version: 1,
+    version: 2,
     transactions,
     categories: normalizeCategories(backup.categories),
     receipts: Array.isArray(backup.receipts)
@@ -134,6 +137,7 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
           receipt_link: transaction.receipt_link,
           reconciled: transaction.reconciled
         })),
+    audit_logs: normalizeAuditLogs(backup.audit_logs),
     settings: normalizeSettings(backup.settings)
   };
 }
@@ -204,7 +208,7 @@ function describeSupabaseError(status: number, statusText: string, body: unknown
   }
 
   if (code === "42P01" || /relation .* does not exist|does not exist|schema cache/.test(combined)) {
-    return `Supabase table is missing. Run supabase/migrations/202605230001_bookkeeping_schema.sql in the Supabase SQL editor. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+    return `Supabase table is missing. Run supabase/migrations/202605230001_bookkeeping_schema.sql and supabase/migrations/202605240001_audit_logs.sql in the Supabase SQL editor. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
   }
 
   if (!message && !details && !hint) {
@@ -303,11 +307,12 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
     throw new Error("Supabase is not configured.");
   }
 
-  const [transactionRows, categoryRows, receiptRows, settingsRows] = await Promise.all([
+  const [transactionRows, categoryRows, receiptRows, settingsRows, auditLogRows] = await Promise.all([
     supabaseRequest<Transaction[]>(config, "transactions?select=*&order=date.desc,created_at.desc"),
     supabaseRequest<Category[]>(config, "categories?select=*&order=name.asc"),
     supabaseRequest<ReceiptRow[]>(config, "receipts?select=*"),
-    supabaseRequest<CompanySettingsRow[]>(config, "company_settings?select=*&id=eq.default&limit=1")
+    supabaseRequest<CompanySettingsRow[]>(config, "company_settings?select=*&id=eq.default&limit=1"),
+    supabaseRequest<AuditLogRow[]>(config, "audit_logs?select=*&order=created_at.desc")
   ]);
 
   const receiptByTransaction = new Map(
@@ -326,12 +331,42 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
 
   return {
     exported_at: new Date().toISOString(),
-    version: 1,
+    version: 2,
     transactions,
     categories: normalizeCategories(categoryRows.length ? categoryRows : seedCategories),
     receipts: receiptRows,
+    audit_logs: normalizeAuditLogs(auditLogRows),
     settings: fromSettingsRow(settingsRows[0])
   };
+}
+
+export async function loadSupabaseAuditLogs(): Promise<AuditLog[]> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const auditLogRows = await supabaseRequest<AuditLogRow[]>(
+    config,
+    "audit_logs?select=*&order=created_at.desc"
+  );
+
+  return normalizeAuditLogs(auditLogRows);
+}
+
+export async function appendSupabaseAuditLogs(entries: AuditLog[]) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const normalizedEntries = normalizeAuditLogs(entries);
+
+  await upsertRows(config, "audit_logs", normalizedEntries, "id");
+
+  return loadSupabaseAuditLogs();
 }
 
 export async function replaceSupabaseBackup(backup: LocalBackup): Promise<LocalBackup> {
@@ -356,6 +391,7 @@ export async function replaceSupabaseBackup(backup: LocalBackup): Promise<LocalB
   await upsertRows(config, "categories", normalized.categories, "id");
   await upsertRows(config, "transactions", transactions, "id");
   await upsertRows(config, "receipts", toReceiptRows(transactions), "transaction_id");
+  await upsertRows(config, "audit_logs", normalized.audit_logs, "id");
   await upsertSettings(config, normalized.settings);
 
   return loadSupabaseBackup();
