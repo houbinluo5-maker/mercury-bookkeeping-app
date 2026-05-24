@@ -6,6 +6,7 @@ import { Button } from "@/components/button";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { YearSelect } from "@/components/period-selectors";
+import { ReconciliationLink } from "@/components/reconciliation-link";
 import { getAvailableYears } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -159,6 +160,8 @@ export default function TaxPackagePage() {
           <p className="text-sm leading-6 text-amber-900">{t("taxPackageWarning")}</p>
         </div>
       </section>
+
+      <ReconciliationLink descriptionKey="reconciliationCenterTaxPackageNotice" />
 
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

@@ -21,6 +21,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Mercury bank CSV import with browser-side parsing, duplicate detection, category preview, and Supabase/localStorage save
 - Categories / Chart of Accounts
 - Receipts tracker with inline receipt link updates and Supabase Storage receipt uploads
+- Reconciliation Center for monthly close review, duplicate candidates, readiness scoring, and CPA issue exports
 - Monthly Report
 - Quarterly Report
 - Annual Tax Summary grouped by tax line and category
@@ -113,7 +114,7 @@ The importer applies the same ecommerce bookkeeping categories used elsewhere in
 - Internal or brokerage transfers -> Investment Transfer
 - Unknown items -> Uncategorized and Needs review
 
-Imported bank transactions default to `Reconciled` because they come from bank activity. `Receipt required` follows the selected category default. After import, rows appear in Dashboard, Transactions, Monthly Report, Quarterly Report, Annual Tax Summary, and Receipts.
+Imported bank transactions default to `Reconciled` because they come from bank activity. `Receipt required` follows the selected category default. After import, rows appear in Dashboard, Transactions, Reconciliation Center, Monthly Report, Quarterly Report, Annual Tax Summary, and Receipts.
 
 ### Review Needs Review Rows
 
@@ -166,7 +167,7 @@ This app uses a deliberately simple MVP auth layer for private deployment:
 
 - `/login` validates the submitted password against server-side `ADMIN_PASSWORD`.
 - Successful login sets an HTTP-only cookie.
-- Middleware requires that cookie before accessing Dashboard, Transactions, Reports, Receipts, Accounts, and Settings.
+- Middleware requires that cookie before accessing Dashboard, Transactions, Reconciliation Center, Reports, Receipts, Accounts, and Settings.
 - The sidebar and mobile header include a logout button.
 
 This is not a full user management system. Supabase auth is intentionally not enabled yet; future production auth can replace this layer when multi-user access, password reset, roles, and audit trails are needed.
@@ -178,6 +179,7 @@ app/
   accounts/
   imports/
     mercury/
+  reconciliation/
   receipts/
   reports/
     annual-tax-summary/
@@ -339,7 +341,7 @@ The language switch translates navigation, page headings, labels, buttons, filte
 
 Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Deleting a transaction asks for confirmation first.
 
-Dashboard totals, monthly reports, quarterly reports, annual tax summary, tax package exports, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
+Dashboard totals, reconciliation views, monthly reports, quarterly reports, annual tax summary, tax package exports, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
 
 ## Receipt Links And Reconciliation
 
@@ -386,6 +388,52 @@ The `Export tax package workbook` button downloads one Excel-compatible `.xls` w
 Send your CPA/accountant the workbook, any CSV files they prefer, the receipt package index, and access to the private receipt storage or document folder that contains the linked files. Uploaded receipts are linked through `transaction.receipt_link` as Supabase Storage object paths, while manual external receipt links remain in the same field. The app does not download every receipt file into a zip yet.
 
 Before relying on the package, manually review Missing Receipts, Needs Review, Reconciliation Issues, sales tax payable treatment, refunds/chargebacks, owner transfers, and any rows with unclear category or tax line. This export is for bookkeeping organization and CPA/accountant review only; it is not tax, legal, or financial advice.
+
+## Reconciliation Center
+
+Open `Reconciliation Center` from the sidebar before monthly closing or CPA export. The page is protected by the same admin-password login as the rest of the app and brings the main bookkeeping cleanup queues into one place: missing receipts, needs review rows, uncategorized transactions, unreconciled transactions, duplicate candidates, revenue deposit review, expense payment review, owner activity, internal transfers, and tax package blockers.
+
+Use the filters to narrow by date range, month, category, issue type, receipt status, reconciliation status, or review status. Each issue row supports practical cleanup actions such as opening the edit modal, marking a transaction reconciled, marking receipt not required, adding a note, uploading a receipt, or changing category where that helps resolve the issue.
+
+### How Missing Receipts Are Detected
+
+Missing receipts are transactions where `receipt_required = true` and `receipt_link` is empty. Expense and COGS categories usually require receipts by default, so these rows are highlighted as important cleanup items before close or CPA handoff.
+
+### How Duplicate Detection Works
+
+Duplicate candidates are found when two transactions have the same signed amount, land on the same date or within one day, and have similar vendor, source, or description text. The Reconciliation Center shows both transactions, the reasons for the warning, and a medium or high confidence label. You can mark a pair as `not duplicate` to suppress that exact warning later, or delete the likely duplicate after confirming.
+
+### How Owner Transfers Are Reviewed
+
+Owner Contributions, Owner Draws / Member Distributions, Investment Transfers, and Internal Transfers are reviewed separately so they are not mistaken for revenue or deductible expenses. The app flags direction problems, unclear transfer notes, unreconciled owner activity, and transfer classifications that look like they could affect net income incorrectly.
+
+### How Readiness Score Is Calculated
+
+The monthly readiness score starts at `100` and deducts points for:
+
+- Missing receipts
+- Needs review rows
+- Uncategorized transactions
+- Unreconciled transactions
+- Possible duplicates
+- Uncategorized expenses
+- Unclear owner transfers
+
+The score is shown with a status of `Ready`, `Needs review`, or `Not ready`, plus the top five issues to fix first.
+
+### Reconciliation Exports
+
+The Reconciliation Center exports CSV files for:
+
+- All reconciliation issues
+- Missing receipts
+- Needs review
+- Duplicate candidates
+- Unreconciled transactions
+- Owner transfer review
+- Monthly readiness checklist
+
+These exports are useful for monthly close review, internal bookkeeping cleanup, and CPA follow-up. They are organizational support files, not tax or legal advice.
 
 ## Future Improvements
 

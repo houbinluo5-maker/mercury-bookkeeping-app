@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeader } from "@/components/page-header";
+import { ReconciliationLink } from "@/components/reconciliation-link";
 import { ReceiptTable } from "@/components/receipt-table";
 import { useI18n } from "@/lib/i18n";
 
@@ -15,6 +16,7 @@ export default function ReceiptsPage() {
           {t("receiptDocumentsNote")}
         </p>
       </div>
+      <ReconciliationLink descriptionKey="reconciliationCenterReceiptsNotice" />
       <ReceiptTable />
     </div>
   );
