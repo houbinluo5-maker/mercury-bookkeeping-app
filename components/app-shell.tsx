@@ -29,6 +29,7 @@ const navItems = [
   { href: "/reports/monthly", labelKey: "monthlyReport", icon: BarChart3 },
   { href: "/reports/quarterly", labelKey: "quarterlyReport", icon: WalletCards },
   { href: "/reports/annual-tax-summary", labelKey: "annualTaxSummary", icon: FileSpreadsheet },
+  { href: "/reports/tax-package", labelKey: "taxPackage", icon: FileSpreadsheet },
   { href: "/settings", labelKey: "settings", icon: Settings }
 ];
 
