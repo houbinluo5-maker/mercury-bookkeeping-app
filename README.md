@@ -24,6 +24,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Monthly Report
 - Quarterly Report
 - Annual Tax Summary grouped by tax line and category
+- CPA / Tax Package page with CSV exports, an Excel-compatible workbook, and a receipt package index
 - Settings stored locally
 - Excel export for transactions, reports, and annual summaries
 - Login/logout gate for private app access
@@ -182,6 +183,7 @@ app/
     annual-tax-summary/
     monthly/
     quarterly/
+    tax-package/
   settings/
   transactions/
     new/
@@ -337,7 +339,7 @@ The language switch translates navigation, page headings, labels, buttons, filte
 
 Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Deleting a transaction asks for confirmation first.
 
-Dashboard totals, monthly reports, quarterly reports, annual tax summary, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
+Dashboard totals, monthly reports, quarterly reports, annual tax summary, tax package exports, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
 
 ## Receipt Links And Reconciliation
 
@@ -360,6 +362,30 @@ Expense and COGS categories require receipts by default, including Advertising E
 - `Receipt linked`: a receipt URL or uploaded receipt path is present.
 - `Needs reconciliation`: the transaction is not marked reconciled yet, commonly used for Shopify payouts or ad invoices that need matching against source reports.
 - `Reconciled`: the transaction has been reviewed against its source documentation.
+
+## Tax Package / CPA Export
+
+Open `Tax Package` under Reports to prepare a tax-ready bookkeeping export for a US LLC ecommerce business. The page is protected by the same admin-password login as the rest of the app. Choose a tax year or date range, then narrow the package by category, receipt status, reconciliation status, or needs-review status.
+
+The dashboard separates revenue, refunds, COGS, operating expenses, owner equity activity, internal transfers, missing receipts, needs-review rows, and unreconciled transactions. Owner contributions are not counted as revenue, owner draws are not treated as deductible expenses, internal or investment transfers are excluded from income and expenses, sales tax payable rows are excluded from revenue, refunds reduce revenue, and COGS stays separate from operating expenses.
+
+The export buttons generate:
+
+- `Full transaction ledger CSV`: every filtered transaction with bookkeeping fields, receipt status, reconciliation status, and review status.
+- `Category summary CSV`: totals by category, category type, tax line, net amount, and tax treatment.
+- `Monthly P&L CSV`: month-by-month revenue, refunds, COGS, expense categories, and net income.
+- `Quarterly P&L CSV`: quarter-by-quarter revenue, refunds, COGS, expense categories, and net income.
+- `Missing receipts CSV`: required transactions that still do not have a receipt link or uploaded receipt path.
+- `Needs review CSV`: uncategorized or manually flagged rows that should be cleaned up before filing.
+- `Owner contributions/draws CSV`: owner equity activity that should be reviewed separately from income and deductions.
+- `Reconciliation issues CSV`: transactions not yet marked reconciled.
+- `Receipt package index CSV`: transaction ID, date, vendor, category, amount, receipt link/path, and receipt status so a CPA can match ledger lines to supporting documents.
+
+The `Export tax package workbook` button downloads one Excel-compatible `.xls` workbook with Summary, Transactions, Category Summary, Monthly P&L, Quarterly P&L, Missing Receipts, Needs Review, Owner Contributions & Draws, and Reconciliation Issues sheets.
+
+Send your CPA/accountant the workbook, any CSV files they prefer, the receipt package index, and access to the private receipt storage or document folder that contains the linked files. Uploaded receipts are linked through `transaction.receipt_link` as Supabase Storage object paths, while manual external receipt links remain in the same field. The app does not download every receipt file into a zip yet.
+
+Before relying on the package, manually review Missing Receipts, Needs Review, Reconciliation Issues, sales tax payable treatment, refunds/chargebacks, owner transfers, and any rows with unclear category or tax line. This export is for bookkeeping organization and CPA/accountant review only; it is not tax, legal, or financial advice.
 
 ## Future Improvements
 
