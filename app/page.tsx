@@ -5,6 +5,7 @@ import { Download, PlusCircle } from "lucide-react";
 import { Button, buttonClassName } from "@/components/button";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { ReconciliationLink } from "@/components/reconciliation-link";
 import { TransactionsTable } from "@/components/transactions-table";
 import { filterByYear, getDashboardStats } from "@/lib/calculations";
 import { downloadExcel } from "@/lib/export-excel";
@@ -65,6 +66,8 @@ export default function DashboardPage() {
           value={`${stats.receipts_missing_count}`}
         />
       </section>
+
+      <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
 
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard

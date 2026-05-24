@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
+  CircleAlert,
   FileSpreadsheet,
   LayoutDashboard,
   ListChecks,
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/imports/mercury", labelKey: "importMercuryCsv", icon: Upload },
   { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
   { href: "/receipts", labelKey: "receipts", icon: ReceiptText },
+  { href: "/reconciliation", labelKey: "reconciliationCenter", icon: CircleAlert },
   { href: "/reports/monthly", labelKey: "monthlyReport", icon: BarChart3 },
   { href: "/reports/quarterly", labelKey: "quarterlyReport", icon: WalletCards },
   { href: "/reports/annual-tax-summary", labelKey: "annualTaxSummary", icon: FileSpreadsheet },

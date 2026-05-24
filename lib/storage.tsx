@@ -28,6 +28,9 @@ type BookkeepingContextValue = {
   categories: Category[];
   storageStatus: StorageStatus;
   addTransaction: (transaction: TransactionDraft) => Transaction;
+  bulkUpdateTransactions: (
+    updates: Array<{ id: string; transaction: Partial<TransactionDraft> }>
+  ) => void;
   importTransactions: (transactions: TransactionDraft[]) => Transaction[];
   updateTransaction: (id: string, transaction: Partial<TransactionDraft>) => void;
   deleteTransaction: (id: string) => void;
@@ -454,6 +457,30 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     [categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
+  const bulkUpdateTransactions = useCallback(
+    (updates: Array<{ id: string; transaction: Partial<TransactionDraft> }>) => {
+      if (updates.length === 0) return;
+
+      const patchById = new Map(
+        updates.map((update) => [update.id, update.transaction] satisfies [string, Partial<TransactionDraft>])
+      );
+      const timestamp = new Date().toISOString();
+      const nextTransactions = transactions.map((transaction) =>
+        patchById.has(transaction.id)
+          ? {
+              ...transaction,
+              ...patchById.get(transaction.id),
+              updated_at: timestamp
+            }
+          : transaction
+      );
+
+      setTransactions(nextTransactions);
+      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+    },
+    [categoryState, maybeSyncToSupabase, settings, transactions]
+  );
+
   const deleteTransaction = useCallback(
     (id: string) => {
       const nextTransactions = transactions.filter((transaction) => transaction.id !== id);
@@ -506,6 +533,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       categories: categoryState,
       storageStatus,
       addTransaction,
+      bulkUpdateTransactions,
       importTransactions,
       updateTransaction,
       deleteTransaction,
@@ -520,6 +548,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     }),
     [
       addTransaction,
+      bulkUpdateTransactions,
       categoryState,
       clearTransactions,
       deleteTransaction,
