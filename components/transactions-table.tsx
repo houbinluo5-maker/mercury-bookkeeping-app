@@ -242,6 +242,7 @@ export function TransactionsTable({
         </div>
       </div>
       <TransactionEditModal
+        key={editingTransaction?.id ?? "transaction-edit-modal"}
         onClose={() => setEditingTransactionId(null)}
         transaction={editingTransaction}
       />

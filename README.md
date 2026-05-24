@@ -22,6 +22,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Categories / Chart of Accounts
 - Receipts tracker with inline receipt link updates and Supabase Storage receipt uploads
 - Reconciliation Center for monthly close review, duplicate candidates, readiness scoring, and CPA issue exports
+- Audit Trail page with filters, CSV export, and inline change history in transaction, receipt, and reconciliation views
 - Monthly Report
 - Quarterly Report
 - Annual Tax Summary grouped by tax line and category
@@ -167,7 +168,7 @@ This app uses a deliberately simple MVP auth layer for private deployment:
 
 - `/login` validates the submitted password against server-side `ADMIN_PASSWORD`.
 - Successful login sets an HTTP-only cookie.
-- Middleware requires that cookie before accessing Dashboard, Transactions, Reconciliation Center, Reports, Receipts, Accounts, and Settings.
+- Middleware requires that cookie before accessing Dashboard, Transactions, Reconciliation Center, Audit Trail, Reports, Receipts, Accounts, and Settings.
 - The sidebar and mobile header include a logout button.
 
 This is not a full user management system. Supabase auth is intentionally not enabled yet; future production auth can replace this layer when multi-user access, password reset, roles, and audit trails are needed.
@@ -177,6 +178,7 @@ This is not a full user management system. Supabase auth is intentionally not en
 ```text
 app/
   accounts/
+  audit/
   imports/
     mercury/
   reconciliation/
@@ -217,6 +219,20 @@ The app also stores a generated `id` and `created_at` timestamp for local UI sta
 
 Supabase rows also include `updated_at`.
 
+Audit history rows include:
+
+- `id`
+- `entity_type`
+- `entity_id`
+- `action`
+- `field_name`
+- `old_value`
+- `new_value`
+- `reason`
+- `created_at`
+- `actor`
+- `source`
+
 ## Supabase Persistence
 
 Supabase is the primary data source when both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured. Supabase Auth is not used yet; the existing `ADMIN_PASSWORD` login remains the access gate.
@@ -237,6 +253,7 @@ Open the Supabase SQL editor and run:
 
 ```text
 supabase/migrations/202605230001_bookkeeping_schema.sql
+supabase/migrations/202605240001_audit_logs.sql
 ```
 
 The migration creates:
@@ -245,6 +262,7 @@ The migration creates:
 - `categories`
 - `receipts`
 - `company_settings`
+- `audit_logs`
 
 RLS is enabled without public policies. The app reads and writes through protected server-side API routes using the service role key.
 
@@ -289,7 +307,7 @@ Redeploy after changing environment variables.
 5. Use `Load from Supabase` to reload the app from the database.
 6. Use `Sync to Supabase` when you want to push the current in-app data snapshot to Supabase.
 
-The sync operation writes transactions, categories, receipt fields, and company settings. Backup export still uses the current in-app data, whether it came from Supabase or localStorage.
+The sync operation writes transactions, categories, receipt fields, company settings, and audit history. Backup export still uses the current in-app data, whether it came from Supabase or localStorage.
 
 ### Fall Back To LocalStorage
 
@@ -316,7 +334,7 @@ This removes all locally stored transactions in the current browser, including d
 2. Select `Export local backup JSON`.
 3. Keep the exported JSON file somewhere private and secure.
 
-The JSON backup includes transactions, categories, receipt status/link data, and company settings.
+The JSON backup includes transactions, categories, receipt status/link data, company settings, and audit history.
 
 ### Restoring Data
 
@@ -324,7 +342,7 @@ The JSON backup includes transactions, categories, receipt status/link data, and
 2. Select `Import local backup JSON`.
 3. Choose a JSON file previously exported from this app.
 
-Restoring replaces the local transactions, categories, and settings in the current browser. If Supabase mode is active, the restored snapshot is also synced to Supabase. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
+Restoring replaces the local transactions, categories, and settings in the current browser, then merges any audit history found in the backup into the existing append-only trail. If Supabase mode is active, the restored snapshot is also synced to Supabase. Use `Reset demo seed data` if you want to return the app to the original sample dataset.
 
 ## Language Switching
 
@@ -339,7 +357,7 @@ The language switch translates navigation, page headings, labels, buttons, filte
 
 ## Editing Transactions
 
-Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Deleting a transaction asks for confirmation first.
+Open the Transactions page and select `Edit` on a row. You can update date, vendor, source, description, category, tax line, money in, money out, receipt link, receipt required status, reconciliation status, and notes. Sensitive changes such as amount, category, tax line, receipt requirement, reconciliation status, and deletion ask for an optional reason and are captured in the audit trail. The edit modal also shows recent audit history for that transaction.
 
 Dashboard totals, reconciliation views, monthly reports, quarterly reports, annual tax summary, tax package exports, receipts, and transaction exports read from the same storage state, so edits and deletes update those views automatically. In Supabase mode, transaction add/edit/delete operations sync back through the protected server API.
 
@@ -435,9 +453,42 @@ The Reconciliation Center exports CSV files for:
 
 These exports are useful for monthly close review, internal bookkeeping cleanup, and CPA follow-up. They are organizational support files, not tax or legal advice.
 
+## Audit Trail
+
+Open `Audit Trail` from the sidebar to review append-only bookkeeping change history. The page is protected by the same admin-password login as the rest of the app and includes search, date range filters, entity-type filters, action filters, source filters, and CSV export.
+
+### What Audit Trail Tracks
+
+The audit trail records important bookkeeping events such as:
+
+- Transaction creation, edits, and deletion
+- Receipt uploads, replacements, deletions, and manual receipt linking
+- Receipt-required changes
+- Reconciliation changes such as mark reconciled, review resolved, duplicate dismissal, and reconciliation notes
+- Mercury CSV transaction imports
+- Settings updates
+
+Each entry stores timestamp, entity type, entity ID, action, changed field, old value, new value, optional reason, actor (`admin` or `system`), and source (`manual`, `import`, `system`, `csv_import`, or `receipt_upload`).
+
+### Why It Matters
+
+Audit history helps bookkeeping cleanup, monthly close review, and CPA follow-up by showing who changed what, when it changed, and why. It also makes it easier to confirm that owner transfers, receipt exceptions, and tax-line updates were intentional rather than accidental.
+
+### Inline Audit History
+
+You can review recent audit entries directly in:
+
+- The Transaction edit modal
+- Receipt row details on the Receipts page
+- Issue row details inside Reconciliation Center
+
+### Exporting Audit Logs
+
+Use the `Export audit log CSV` button on the Audit Trail page when you want to share change history with a CPA, accountant, or internal reviewer. The export is a bookkeeping support file, not legal advice, and it does not allow audit entries to be deleted from the UI.
+
 ## Future Improvements
 
-Future production hardening can add Supabase Auth, per-user roles, audit logs, server-side validation, and private receipt file storage in Supabase Storage or another object store.
+Future production hardening can add Supabase Auth, per-user roles, stronger audit-log retention controls, server-side validation, and private receipt file storage in Supabase Storage or another object store.
 
 ## Integration Guardrails
 

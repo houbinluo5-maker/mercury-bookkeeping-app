@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { ExternalLink, RefreshCw, Trash2, Upload } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { buttonClassName, Button } from "@/components/button";
+import { promptOptionalAuditReason } from "@/lib/audit-reason";
 import { useI18n } from "@/lib/i18n";
 import {
   getReceiptAccessUrl,
@@ -14,7 +15,14 @@ import {
 
 type ReceiptUploadControlProps = {
   compact?: boolean;
-  onReceiptLinkChange: (receiptLink: string) => void;
+  onReceiptLinkChange: (
+    receiptLink: string,
+    audit?: {
+      action?: "delete_receipt" | "replace_receipt" | "upload_receipt";
+      reason?: string;
+      source?: "receipt_upload";
+    }
+  ) => void;
   receiptLink: string;
   receiptRequired: boolean;
   transactionId: string;
@@ -83,7 +91,10 @@ export function ReceiptUploadControl({
         throw new Error(result.error || t("receiptUploadError"));
       }
 
-      onReceiptLinkChange(result.path);
+      onReceiptLinkChange(result.path, {
+        action: hasReceipt ? "replace_receipt" : "upload_receipt",
+        source: "receipt_upload"
+      });
       setMessage(result.deleteWarning || t("receiptUploaded"));
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : t("receiptUploadError"));
@@ -94,6 +105,9 @@ export function ReceiptUploadControl({
 
   async function deleteReceipt() {
     if (!receiptLink.trim()) return;
+    const reason = promptOptionalAuditReason(t, t("deleteReceipt"));
+
+    if (reason === null) return;
 
     setBusy("delete");
     setError("");
@@ -113,7 +127,11 @@ export function ReceiptUploadControl({
         }
       }
 
-      onReceiptLinkChange("");
+      onReceiptLinkChange("", {
+        action: "delete_receipt",
+        reason,
+        source: "receipt_upload"
+      });
       setMessage(t("receiptDeleted"));
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : t("receiptDeleteError"));

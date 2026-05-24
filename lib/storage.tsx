@@ -9,12 +9,25 @@ import {
   useState
 } from "react";
 import {
+  buildSettingsAuditLogs,
+  buildTransactionAuditLogs,
+  createAuditEntry,
+  mergeAuditLogs,
+  normalizeAuditLogs,
+  transactionSummary,
+  type SettingsAuditOptions,
+  type TransactionAuditOptions
+} from "@/lib/audit";
+import {
   getReceiptRequiredDefault,
   normalizeCategoryReceiptDefault
 } from "@/lib/receipt-requirements";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
 import type {
   AppSettings,
+  AuditActor,
+  AuditLog,
+  AuditSource,
   Category,
   LocalBackup,
   StorageStatus,
@@ -22,19 +35,37 @@ import type {
   TransactionDraft
 } from "@/lib/types";
 
+type CreateTransactionAuditOptions = {
+  actor?: AuditActor;
+  reason?: string;
+  source?: AuditSource;
+};
+
+type BulkTransactionUpdate = {
+  audit?: TransactionAuditOptions;
+  id: string;
+  transaction: Partial<TransactionDraft>;
+};
+
 type BookkeepingContextValue = {
   transactions: Transaction[];
   settings: AppSettings;
   categories: Category[];
+  auditLogs: AuditLog[];
   storageStatus: StorageStatus;
-  addTransaction: (transaction: TransactionDraft) => Transaction;
-  bulkUpdateTransactions: (
-    updates: Array<{ id: string; transaction: Partial<TransactionDraft> }>
+  addTransaction: (transaction: TransactionDraft, audit?: CreateTransactionAuditOptions) => Transaction;
+  bulkUpdateTransactions: (updates: BulkTransactionUpdate[]) => void;
+  importTransactions: (
+    transactions: TransactionDraft[],
+    audit?: CreateTransactionAuditOptions
+  ) => Transaction[];
+  updateTransaction: (
+    id: string,
+    transaction: Partial<TransactionDraft>,
+    audit?: TransactionAuditOptions
   ) => void;
-  importTransactions: (transactions: TransactionDraft[]) => Transaction[];
-  updateTransaction: (id: string, transaction: Partial<TransactionDraft>) => void;
-  deleteTransaction: (id: string) => void;
-  updateSettings: (settings: AppSettings) => void;
+  deleteTransaction: (id: string, audit?: CreateTransactionAuditOptions) => void;
+  updateSettings: (settings: AppSettings, audit?: SettingsAuditOptions) => void;
   clearTransactions: () => void;
   resetDemoData: () => void;
   exportBackup: () => LocalBackup;
@@ -54,9 +85,20 @@ type StorageApiResponse = {
   mode: StorageStatus["mode"];
 };
 
+type AuditApiResponse = {
+  apiStatus?: number;
+  apiStatusText?: string;
+  configured: boolean;
+  data?: AuditLog[];
+  error?: string;
+  message?: string;
+  mode: StorageStatus["mode"];
+};
+
 const TRANSACTIONS_KEY = "mercury-bookkeeping-transactions";
 const SETTINGS_KEY = "mercury-bookkeeping-settings";
 const CATEGORIES_KEY = "mercury-bookkeeping-categories";
+const AUDIT_LOGS_KEY = "mercury-bookkeeping-audit-logs";
 
 const localStorageStatus: StorageStatus = {
   apiStatus: 200,
@@ -91,6 +133,10 @@ function createId() {
   }
 
   return `txn-${Date.now()}`;
+}
+
+function sortTransactions(items: Transaction[]) {
+  return [...items].sort((left, right) => right.date.localeCompare(left.date));
 }
 
 function normalizeSettings(settings: Partial<AppSettings> | null | undefined): AppSettings {
@@ -162,7 +208,7 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
 
   return {
     exported_at: backup.exported_at || new Date().toISOString(),
-    version: 1,
+    version: backup.version === 1 ? 1 : 2,
     transactions,
     categories: normalizeCategories(backup.categories),
     receipts: Array.isArray(backup.receipts)
@@ -173,6 +219,7 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
           receipt_link: transaction.receipt_link,
           reconciled: transaction.reconciled
         })),
+    audit_logs: normalizeAuditLogs(backup.audit_logs),
     settings: normalizeSettings(backup.settings)
   };
 }
@@ -180,11 +227,12 @@ function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
 function createBackup(
   transactions: Transaction[],
   categoryState: Category[],
-  settings: AppSettings
+  settings: AppSettings,
+  auditLogs: AuditLog[]
 ): LocalBackup {
   return {
     exported_at: new Date().toISOString(),
-    version: 1,
+    version: 2,
     transactions,
     categories: categoryState,
     receipts: transactions.map((transaction) => ({
@@ -193,6 +241,7 @@ function createBackup(
       receipt_link: transaction.receipt_link,
       reconciled: transaction.reconciled
     })),
+    audit_logs: auditLogs,
     settings
   };
 }
@@ -201,15 +250,17 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const [transactions, setTransactions] = useState<Transaction[]>(seedTransactions);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [categoryState, setCategoryState] = useState<Category[]>(categories);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>(checkingStorageStatus);
   const [loaded, setLoaded] = useState(false);
 
   const applyBackup = useCallback((backup: Partial<LocalBackup>) => {
     const normalized = normalizeBackup(backup);
 
-    setTransactions(normalized.transactions.sort((a, b) => b.date.localeCompare(a.date)));
+    setTransactions(sortTransactions(normalized.transactions));
     setCategoryState(normalized.categories);
     setSettings(normalized.settings);
+    setAuditLogs(normalized.audit_logs);
 
     return normalized;
   }, []);
@@ -263,6 +314,71 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     []
   );
 
+  const requestAudit = useCallback(
+    async (method: "GET" | "POST", entries?: AuditLog[]): Promise<AuditApiResponse> => {
+      const response = await fetch("/api/audit", {
+        method,
+        headers: entries ? { "Content-Type": "application/json" } : undefined,
+        body: entries ? JSON.stringify({ entries }) : undefined
+      });
+      const responseText = await response.text();
+      let result: AuditApiResponse | null = null;
+
+      if (responseText.trim()) {
+        try {
+          result = JSON.parse(responseText) as AuditApiResponse;
+        } catch {
+          throw new Error(
+            `Audit API returned invalid JSON. HTTP ${response.status} ${response.statusText}. ${responseText.slice(0, 240)}`
+          );
+        }
+      }
+
+      if (!result && !response.ok) {
+        throw new Error(`Audit API request failed. HTTP ${response.status} ${response.statusText}.`);
+      }
+
+      if (!result) {
+        return {
+          apiStatus: response.status,
+          apiStatusText: response.statusText,
+          configured: false,
+          message: "Audit API returned an empty successful response; using localStorage fallback.",
+          mode: "local"
+        };
+      }
+
+      if (!response.ok) {
+        const detail = result.error || result.message || "Audit request failed.";
+
+        throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
+      }
+
+      return {
+        ...result,
+        apiStatus: result.apiStatus ?? response.status,
+        apiStatusText: result.apiStatusText ?? response.statusText
+      };
+    },
+    []
+  );
+
+  const loadAuditTrail = useCallback(async () => {
+    try {
+      const result = await requestAudit("GET");
+
+      if (!result.configured) return false;
+
+      if (result.data) {
+        setAuditLogs(normalizeAuditLogs(result.data));
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }, [requestAudit]);
+
   const loadFromSupabase = useCallback(async () => {
     try {
       const result = await requestStorage("GET");
@@ -288,6 +404,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         mode: "supabase",
         message: result.message || "Supabase connected."
       });
+      void loadAuditTrail();
       return true;
     } catch (error) {
       setStorageStatus({
@@ -300,7 +417,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       });
       return false;
     }
-  }, [applyBackup, requestStorage]);
+  }, [applyBackup, loadAuditTrail, requestStorage]);
 
   const sendBackupToSupabase = useCallback(
     async (backup: LocalBackup) => {
@@ -344,13 +461,58 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     [applyBackup, requestStorage]
   );
 
-  const maybeSyncToSupabase = useCallback(
-    (backup: LocalBackup) => {
-      if (storageStatus.configured && storageStatus.mode === "supabase") {
-        void sendBackupToSupabase(backup);
+  const sendAuditEntriesToSupabase = useCallback(
+    async (entries: AuditLog[]) => {
+      if (!entries.length) return true;
+
+      try {
+        const result = await requestAudit("POST", entries);
+
+        if (!result.configured) {
+          setStorageStatus({
+            ...localStorageStatus,
+            apiStatus: result.apiStatus,
+            apiStatusText: result.apiStatusText,
+            message: result.message || localStorageStatus.message
+          });
+          return false;
+        }
+
+        if (result.data) {
+          setAuditLogs(normalizeAuditLogs(result.data));
+        }
+
+        return true;
+      } catch (error) {
+        setStorageStatus({
+          apiStatus: 0,
+          apiStatusText: "Client error",
+          configured: true,
+          error: error instanceof Error ? error.message : "Supabase audit sync failed.",
+          mode: "error",
+          message: error instanceof Error ? error.message : "Supabase audit sync failed."
+        });
+        return false;
       }
     },
-    [sendBackupToSupabase, storageStatus.configured, storageStatus.mode]
+    [requestAudit]
+  );
+
+  const maybeSyncToSupabase = useCallback(
+    (backup: LocalBackup, newAuditEntries: AuditLog[] = []) => {
+      if (storageStatus.configured && storageStatus.mode === "supabase") {
+        void sendBackupToSupabase(backup);
+        if (newAuditEntries.length) {
+          void sendAuditEntriesToSupabase(newAuditEntries);
+        }
+      }
+    },
+    [
+      sendAuditEntriesToSupabase,
+      sendBackupToSupabase,
+      storageStatus.configured,
+      storageStatus.mode
+    ]
   );
 
   useEffect(() => {
@@ -358,7 +520,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       const localBackup = normalizeBackup({
         transactions: loadJson(TRANSACTIONS_KEY, seedTransactions),
         settings: loadJson(SETTINGS_KEY, defaultSettings),
-        categories: loadJson(CATEGORIES_KEY, categories)
+        categories: loadJson(CATEGORIES_KEY, categories),
+        audit_logs: loadJson(AUDIT_LOGS_KEY, [])
       });
 
       applyBackup(localBackup);
@@ -387,22 +550,46 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     }
   }, [categoryState, loaded]);
 
+  useEffect(() => {
+    if (loaded) {
+      window.localStorage.setItem(AUDIT_LOGS_KEY, JSON.stringify(auditLogs));
+    }
+  }, [auditLogs, loaded]);
+
   const syncToSupabase = useCallback(async () => {
-    return sendBackupToSupabase(createBackup(transactions, categoryState, settings));
-  }, [categoryState, sendBackupToSupabase, settings, transactions]);
+    const backup = createBackup(transactions, categoryState, settings, auditLogs);
+    const [backupOk, auditOk] = await Promise.all([
+      sendBackupToSupabase(backup),
+      sendAuditEntriesToSupabase(auditLogs)
+    ]);
+
+    return backupOk && auditOk;
+  }, [auditLogs, categoryState, sendAuditEntriesToSupabase, sendBackupToSupabase, settings, transactions]);
 
   const migrateLocalDataToSupabase = useCallback(async () => {
     const localBackup = normalizeBackup({
       transactions: loadJson(TRANSACTIONS_KEY, transactions),
       settings: loadJson(SETTINGS_KEY, settings),
-      categories: loadJson(CATEGORIES_KEY, categoryState)
+      categories: loadJson(CATEGORIES_KEY, categoryState),
+      audit_logs: loadJson(AUDIT_LOGS_KEY, auditLogs)
     });
+    const [backupOk, auditOk] = await Promise.all([
+      sendBackupToSupabase(localBackup),
+      sendAuditEntriesToSupabase(localBackup.audit_logs)
+    ]);
 
-    return sendBackupToSupabase(localBackup);
-  }, [categoryState, sendBackupToSupabase, settings, transactions]);
+    return backupOk && auditOk;
+  }, [
+    auditLogs,
+    categoryState,
+    sendAuditEntriesToSupabase,
+    sendBackupToSupabase,
+    settings,
+    transactions
+  ]);
 
   const addTransaction = useCallback(
-    (draft: TransactionDraft) => {
+    (draft: TransactionDraft, audit: CreateTransactionAuditOptions = {}) => {
       const now = new Date().toISOString();
       const transaction: Transaction = {
         ...draft,
@@ -410,20 +597,37 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         created_at: now,
         updated_at: now
       };
-      const nextTransactions = [transaction, ...transactions].sort((a, b) =>
-        b.date.localeCompare(a.date)
-      );
+      const nextTransactions = sortTransactions([transaction, ...transactions]);
+      const newAuditEntries = [
+        createAuditEntry({
+          action: "create",
+          actor: audit.actor ?? "admin",
+          created_at: now,
+          entity_id: transaction.id,
+          entity_type: "transaction",
+          field_name: "",
+          new_value: transactionSummary(transaction),
+          old_value: "",
+          reason: audit.reason || "",
+          source: audit.source ?? "manual"
+        })
+      ];
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setTransactions(nextTransactions);
-      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(nextTransactions, categoryState, settings, nextAuditLogs),
+        newAuditEntries
+      );
 
       return transaction;
     },
-    [categoryState, maybeSyncToSupabase, settings, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const importTransactions = useCallback(
-    (drafts: TransactionDraft[]) => {
+    (drafts: TransactionDraft[], audit: CreateTransactionAuditOptions = {}) => {
       const now = new Date().toISOString();
       const importedTransactions = drafts.map((draft) => ({
         ...draft,
@@ -431,99 +635,259 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         created_at: now,
         updated_at: now
       }));
-      const nextTransactions = [...importedTransactions, ...transactions].sort((a, b) =>
-        b.date.localeCompare(a.date)
+      const nextTransactions = sortTransactions([...importedTransactions, ...transactions]);
+      const newAuditEntries = importedTransactions.map((transaction) =>
+        createAuditEntry({
+          action: "create",
+          actor: audit.actor ?? "system",
+          created_at: now,
+          entity_id: transaction.id,
+          entity_type: "transaction",
+          field_name: "",
+          new_value: transactionSummary(transaction),
+          old_value: "",
+          reason: audit.reason || transaction.notes || "Imported transaction.",
+          source: audit.source ?? "csv_import"
+        })
       );
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setTransactions(nextTransactions);
-      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(nextTransactions, categoryState, settings, nextAuditLogs),
+        newAuditEntries
+      );
 
       return importedTransactions;
     },
-    [categoryState, maybeSyncToSupabase, settings, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const updateTransaction = useCallback(
-    (id: string, draft: Partial<TransactionDraft>) => {
-      const nextTransactions = transactions.map((transaction) =>
-        transaction.id === id
-          ? { ...transaction, ...draft, updated_at: new Date().toISOString() }
-          : transaction
+    (id: string, draft: Partial<TransactionDraft>, audit: TransactionAuditOptions = {}) => {
+      const currentTransaction = transactions.find((transaction) => transaction.id === id);
+
+      if (!currentTransaction) return;
+
+      const timestamp = new Date().toISOString();
+      const nextTransaction = {
+        ...currentTransaction,
+        ...draft,
+        updated_at: timestamp
+      };
+      const newAuditEntries = buildTransactionAuditLogs(currentTransaction, nextTransaction, {
+        ...audit,
+        createdAt: timestamp
+      });
+
+      if (!newAuditEntries.length) return;
+
+      const nextTransactions = sortTransactions(
+        transactions.map((transaction) => (transaction.id === id ? nextTransaction : transaction))
       );
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setTransactions(nextTransactions);
-      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(nextTransactions, categoryState, settings, nextAuditLogs),
+        newAuditEntries
+      );
     },
-    [categoryState, maybeSyncToSupabase, settings, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const bulkUpdateTransactions = useCallback(
-    (updates: Array<{ id: string; transaction: Partial<TransactionDraft> }>) => {
+    (updates: BulkTransactionUpdate[]) => {
       if (updates.length === 0) return;
 
-      const patchById = new Map(
-        updates.map((update) => [update.id, update.transaction] satisfies [string, Partial<TransactionDraft>])
-      );
+      const patchById = new Map(updates.map((update) => [update.id, update]));
       const timestamp = new Date().toISOString();
-      const nextTransactions = transactions.map((transaction) =>
-        patchById.has(transaction.id)
-          ? {
-              ...transaction,
-              ...patchById.get(transaction.id),
-              updated_at: timestamp
-            }
-          : transaction
+      const newAuditEntries: AuditLog[] = [];
+      const nextTransactions = sortTransactions(
+        transactions.map((transaction) => {
+          const update = patchById.get(transaction.id);
+
+          if (!update) return transaction;
+
+          const nextTransaction = {
+            ...transaction,
+            ...update.transaction,
+            updated_at: timestamp
+          };
+
+          newAuditEntries.push(
+            ...buildTransactionAuditLogs(transaction, nextTransaction, {
+              ...update.audit,
+              createdAt: timestamp
+            })
+          );
+
+          return nextTransaction;
+        })
       );
 
+      if (!newAuditEntries.length) return;
+
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
+
       setTransactions(nextTransactions);
-      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(nextTransactions, categoryState, settings, nextAuditLogs),
+        newAuditEntries
+      );
     },
-    [categoryState, maybeSyncToSupabase, settings, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const deleteTransaction = useCallback(
-    (id: string) => {
+    (id: string, audit: CreateTransactionAuditOptions = {}) => {
+      const currentTransaction = transactions.find((transaction) => transaction.id === id);
+
+      if (!currentTransaction) return;
+
+      const timestamp = new Date().toISOString();
+      const newAuditEntries = [
+        createAuditEntry({
+          action: "delete",
+          actor: audit.actor ?? "admin",
+          created_at: timestamp,
+          entity_id: currentTransaction.id,
+          entity_type: "transaction",
+          field_name: "",
+          new_value: "",
+          old_value: transactionSummary(currentTransaction),
+          reason: audit.reason || "",
+          source: audit.source ?? "manual"
+        })
+      ];
       const nextTransactions = transactions.filter((transaction) => transaction.id !== id);
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setTransactions(nextTransactions);
-      maybeSyncToSupabase(createBackup(nextTransactions, categoryState, settings));
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(nextTransactions, categoryState, settings, nextAuditLogs),
+        newAuditEntries
+      );
     },
-    [categoryState, maybeSyncToSupabase, settings, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const updateSettings = useCallback(
-    (nextSettings: AppSettings) => {
+    (nextSettings: AppSettings, audit: SettingsAuditOptions = {}) => {
       const normalized = normalizeSettings(nextSettings);
+      const newAuditEntries = buildSettingsAuditLogs(settings, normalized, audit);
+      const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setSettings(normalized);
-      maybeSyncToSupabase(createBackup(transactions, categoryState, normalized));
+      if (newAuditEntries.length) {
+        setAuditLogs(nextAuditLogs);
+      }
+      maybeSyncToSupabase(
+        createBackup(transactions, categoryState, normalized, nextAuditLogs),
+        newAuditEntries
+      );
     },
-    [categoryState, maybeSyncToSupabase, transactions]
+    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
   );
 
   const clearTransactions = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    const newAuditEntries = transactions.map((transaction) =>
+      createAuditEntry({
+        action: "delete",
+        actor: "admin",
+        created_at: timestamp,
+        entity_id: transaction.id,
+        entity_type: "transaction",
+        field_name: "",
+        new_value: "",
+        old_value: transactionSummary(transaction),
+        reason: "Cleared from data management.",
+        source: "manual"
+      })
+    );
+    const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
+
     setTransactions([]);
-    maybeSyncToSupabase(createBackup([], categoryState, settings));
-  }, [categoryState, maybeSyncToSupabase, settings]);
+    setAuditLogs(nextAuditLogs);
+    maybeSyncToSupabase(
+      createBackup([], categoryState, settings, nextAuditLogs),
+      newAuditEntries
+    );
+  }, [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]);
 
   const resetDemoData = useCallback(() => {
+    const timestamp = new Date().toISOString();
+    const deleteEntries = transactions.map((transaction) =>
+      createAuditEntry({
+        action: "delete",
+        actor: "admin",
+        created_at: timestamp,
+        entity_id: transaction.id,
+        entity_type: "transaction",
+        field_name: "",
+        new_value: "",
+        old_value: transactionSummary(transaction),
+        reason: "Reset demo seed data.",
+        source: "system"
+      })
+    );
+    const createEntries = seedTransactions.map((transaction) =>
+      createAuditEntry({
+        action: "create",
+        actor: "system",
+        created_at: timestamp,
+        entity_id: transaction.id,
+        entity_type: "transaction",
+        field_name: "",
+        new_value: transactionSummary(transaction),
+        old_value: "",
+        reason: "Reset demo seed data.",
+        source: "system"
+      })
+    );
+    const settingEntries = buildSettingsAuditLogs(settings, defaultSettings, {
+      actor: "admin",
+      createdAt: timestamp,
+      reason: "Reset demo seed data.",
+      source: "system"
+    });
+    const newAuditEntries = [...deleteEntries, ...createEntries, ...settingEntries];
+    const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
+
     setTransactions(seedTransactions);
     setSettings(defaultSettings);
     setCategoryState(categories);
-    maybeSyncToSupabase(createBackup(seedTransactions, categories, defaultSettings));
-  }, [maybeSyncToSupabase]);
+    setAuditLogs(nextAuditLogs);
+    maybeSyncToSupabase(
+      createBackup(seedTransactions, categories, defaultSettings, nextAuditLogs),
+      newAuditEntries
+    );
+  }, [auditLogs, maybeSyncToSupabase, settings, transactions]);
 
   const exportBackup = useCallback<() => LocalBackup>(() => {
-    return createBackup(transactions, categoryState, settings);
-  }, [categoryState, settings, transactions]);
+    return createBackup(transactions, categoryState, settings, auditLogs);
+  }, [auditLogs, categoryState, settings, transactions]);
 
   const importBackup = useCallback(
     (backup: LocalBackup) => {
-      const normalized = applyBackup(backup);
+      const normalized = normalizeBackup(backup);
+      const nextAuditLogs = mergeAuditLogs(auditLogs, normalized.audit_logs);
 
-      maybeSyncToSupabase(normalized);
+      setTransactions(sortTransactions(normalized.transactions));
+      setCategoryState(normalized.categories);
+      setSettings(normalized.settings);
+      setAuditLogs(nextAuditLogs);
+      maybeSyncToSupabase(
+        createBackup(normalized.transactions, normalized.categories, normalized.settings, nextAuditLogs),
+        nextAuditLogs
+      );
     },
-    [applyBackup, maybeSyncToSupabase]
+    [auditLogs, maybeSyncToSupabase]
   );
 
   const value = useMemo<BookkeepingContextValue>(
@@ -531,6 +895,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       transactions,
       settings,
       categories: categoryState,
+      auditLogs,
       storageStatus,
       addTransaction,
       bulkUpdateTransactions,
@@ -548,6 +913,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     }),
     [
       addTransaction,
+      auditLogs,
       bulkUpdateTransactions,
       categoryState,
       clearTransactions,
