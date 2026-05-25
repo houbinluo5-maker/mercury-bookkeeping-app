@@ -10,9 +10,14 @@ export default function ReceiptsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow={t("documentation")} title={t("receipts")} />
-      <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
-        <p className="text-sm text-slate-700">
+      <PageHeader
+        description={t("receiptsPageDescription")}
+        eyebrow={t("documentation")}
+        title={t("receipts")}
+      />
+      <div className="surface-card p-4">
+        <h2 className="section-title">{t("receiptSupportPolicy")}</h2>
+        <p className="section-subtitle">
           {t("receiptDocumentsNote")}
         </p>
       </div>
