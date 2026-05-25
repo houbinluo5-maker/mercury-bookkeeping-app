@@ -83,7 +83,7 @@ export function TransactionsTable({
   return (
     <div className="space-y-4">
       {!compact ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="surface-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid gap-3 sm:grid-cols-[18rem_16rem_14rem]">
             <label className="relative block">
               <Search
@@ -136,7 +136,7 @@ export function TransactionsTable({
       {!compact ? (
         <div className="space-y-3 md:hidden">
           {filtered.map((transaction) => (
-            <article className="rounded-lg border border-line bg-white p-4 shadow-soft" key={transaction.id}>
+            <article className="surface-card p-4" key={transaction.id}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-ink">
@@ -178,14 +178,14 @@ export function TransactionsTable({
             </article>
           ))}
           {filtered.length === 0 ? (
-            <div className="rounded-lg border border-line bg-white px-3 py-8 text-center text-sm text-slate-500">
+            <div className="surface-card px-3 py-8 text-center text-sm text-slate-500">
               {t("emptyTransactions")}
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-lg border border-line bg-white shadow-soft">
+      <div className="surface-card overflow-hidden">
         <div className={compact ? "overflow-x-auto" : "hidden overflow-x-auto md:block"}>
           <table className="min-w-full border-collapse">
             <thead className="table-head">
@@ -202,7 +202,7 @@ export function TransactionsTable({
             </thead>
             <tbody>
               {filtered.map((transaction) => (
-                <tr className="hover:bg-slate-50" key={transaction.id}>
+                <tr className="transition hover:bg-slate-50" key={transaction.id}>
                   <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
                   <td className="table-cell min-w-56">
                     <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>

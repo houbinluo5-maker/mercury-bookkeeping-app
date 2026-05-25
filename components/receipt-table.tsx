@@ -108,11 +108,11 @@ export function ReceiptTable() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("missingReceipts")}</h2>
-            <p className="mt-1 text-sm text-slate-600">
+            <h2 className="section-title">{t("missingReceipts")}</h2>
+            <p className="section-subtitle">
               {t("transactionsNeedReceiptLinks").replace("{count}", String(missingReceipts.length))}
             </p>
           </div>
@@ -123,7 +123,7 @@ export function ReceiptTable() {
         {missingReceipts.length ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {missingReceipts.slice(0, 6).map((transaction) => (
-              <div className="rounded-md border border-red-100 bg-red-50 p-3" key={transaction.id}>
+              <div className="rounded-md border border-red-100 bg-red-50/80 p-3" key={transaction.id}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-ink">{transaction.vendor}</p>
@@ -158,7 +158,7 @@ export function ReceiptTable() {
         ) : null}
       </section>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="surface-card flex flex-wrap gap-2 p-3">
         {filters.map((item) => (
           <Button
             className={filter === item ? "border-marine bg-marine text-white hover:bg-ink" : ""}
@@ -170,7 +170,7 @@ export function ReceiptTable() {
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-line bg-white shadow-soft">
+      <div className="surface-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead className="table-head">
@@ -190,7 +190,7 @@ export function ReceiptTable() {
                 );
 
                 return (
-                  <tr className="hover:bg-slate-50" key={transaction.id}>
+                  <tr className="transition hover:bg-slate-50" key={transaction.id}>
                     <td className="table-cell whitespace-nowrap">{formatDate(transaction.date)}</td>
                     <td className="table-cell min-w-60">
                       <p className="font-medium text-ink">{transaction.vendor || t("manualEntry")}</p>

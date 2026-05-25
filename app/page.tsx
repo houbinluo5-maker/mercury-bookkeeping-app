@@ -42,6 +42,7 @@ export default function DashboardPage() {
         eyebrow={`${settings.company_name} - ${settings.tax_year} - ${
           settings.business_type_tax_notes || settings.entity_type
         }`}
+        description={t("dashboardSaasDescription")}
         title={t("dashboard")}
       />
 
@@ -73,18 +74,24 @@ export default function DashboardPage() {
 
       <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={closedCount ? "green" : "neutral"}>
-            {t("closedStatus")}: {closedCount}
-          </Badge>
-          <Badge tone={reopenedCount ? "amber" : "green"}>
-            {t("reopenedStatus")}: {reopenedCount}
-          </Badge>
-          {reopenedCount ? (
-            <span className="text-sm text-amber-800">{t("periodIncludesReopenedMonths")}</span>
-          ) : null}
+      <section className="surface-card p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="section-title">{t("bookkeepingHealth")}</h2>
+            <p className="section-subtitle">{t("bookkeepingHealthHelp")}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={closedCount ? "green" : "neutral"}>
+              {t("closedStatus")}: {closedCount}
+            </Badge>
+            <Badge tone={reopenedCount ? "amber" : "green"}>
+              {t("reopenedStatus")}: {reopenedCount}
+            </Badge>
+          </div>
         </div>
+        {reopenedCount ? (
+          <p className="mt-3 text-sm text-amber-800">{t("periodIncludesReopenedMonths")}</p>
+        ) : null}
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -103,7 +110,10 @@ export default function DashboardPage() {
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-normal text-ink">{t("reportsTransactions")}</h2>
+          <div>
+            <h2 className="section-title">{t("reportsTransactions")}</h2>
+            <p className="section-subtitle">{t("recentTransactionsHelp")}</p>
+          </div>
           <Link className="text-sm font-semibold text-marine hover:text-ink" href="/transactions">
             {t("viewAll")}
           </Link>

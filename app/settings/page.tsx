@@ -189,11 +189,12 @@ export default function SettingsPage() {
           </>
         }
         eyebrow={t("localMvp")}
+        description={t("settingsPageDescription")}
         title={t("settings")}
       />
 
       <form className="space-y-6" onSubmit={submit}>
-        <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
+        <section className="surface-card space-y-4 p-4">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-ink">{t("companySettings")}</h2>
             <p className="mt-1 text-sm text-slate-600">{t("companySettingsHelp")}</p>
@@ -292,7 +293,7 @@ export default function SettingsPage() {
         </section>
       </form>
 
-      <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card space-y-4 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-ink">{t("supabasePersistence")}</h2>
@@ -302,7 +303,7 @@ export default function SettingsPage() {
         </div>
 
         {(storageStatus.mode === "local" && !supabaseConnected) || storageStatus.mode === "error" ? (
-          <div className="flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+          <div className="notice flex gap-3 border-amber-200 bg-amber-50 text-amber-800">
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
               {storageStatus.mode === "error"
@@ -313,24 +314,24 @@ export default function SettingsPage() {
         ) : null}
 
         {supabaseConnected ? (
-          <div className="flex gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-sm text-blue-800">
+          <div className="notice flex gap-3 border-blue-200 bg-blue-50 text-blue-800">
             <Database aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
             <p>{backupWriteDisabledNotice}</p>
           </div>
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("storageStatus")}</p>
             <div className="mt-3">
               <Badge tone={storageStatusTone()}>{storageStatusLabel()}</Badge>
             </div>
           </div>
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("transactions")}</p>
             <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
           </div>
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("dataSource")}</p>
             <div className="mt-3">
               <Badge tone={supabaseConnected ? "green" : "amber"}>
@@ -425,17 +426,17 @@ export default function SettingsPage() {
         ) : null}
       </section>
 
-      <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card space-y-4 p-4">
         <div>
           <h2 className="text-lg font-semibold tracking-normal text-ink">{t("dataManagement")}</h2>
-          <div className="mt-3 flex gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+          <div className="notice mt-3 flex gap-3 border-amber-200 bg-amber-50 text-amber-800">
             <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
             <p>{t("dataManagementWarning")}</p>
           </div>
         </div>
 
         <section className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("dataSource")}</p>
             <div className="mt-3">
               <Badge tone={supabaseConnected ? "green" : "amber"}>
@@ -443,11 +444,11 @@ export default function SettingsPage() {
               </Badge>
             </div>
           </div>
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("transactions")}</p>
             <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
           </div>
-          <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+          <div className="surface-card p-4 shadow-none">
             <p className="form-label">{t("integrations")}</p>
             <div className="mt-3">
               <Badge tone="neutral">{t("notConnected")}</Badge>

@@ -362,9 +362,9 @@ function IssueSection({
   };
 
   return (
-    <section className={`space-y-3 rounded-lg border bg-white p-4 shadow-soft ${toneClasses[tone]}`}>
+    <section className={`surface-card space-y-3 p-4 ${toneClasses[tone]}`}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-ink">{title}</h2>
+        <h2 className="section-title">{title}</h2>
         <Badge tone={tone === "neutral" ? "blue" : tone}>{String(count)}</Badge>
       </div>
       {children}
@@ -671,17 +671,18 @@ export default function ReconciliationPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow={`${settings.entity_type} - ${t(reconciliationData.summary.monthlyReadinessStatus)}`}
+        description={t("reconciliationPageDescription")}
         title={t("reconciliationCenter")}
       />
 
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <section className="notice border-amber-200 bg-amber-50">
         <div className="flex gap-3">
           <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
           <p className="text-sm leading-6 text-amber-900">{t("reconciliationCenterHelp")}</p>
         </div>
       </section>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card p-4">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="space-y-1">
             <span className="form-label">{t("startDate")}</span>
@@ -803,11 +804,11 @@ export default function ReconciliationPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="surface-card p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-ink">{t("monthlyReadinessScore")}</h2>
-              <p className="mt-1 text-sm text-slate-600">{t("monthlyReadinessSummary")}</p>
+              <h2 className="section-title">{t("monthlyReadinessScore")}</h2>
+              <p className="section-subtitle">{t("monthlyReadinessSummary")}</p>
             </div>
             <IssueLevelBadge
               label={t(reconciliationData.summary.monthlyReadinessStatus)}
@@ -850,10 +851,10 @@ export default function ReconciliationPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="surface-card p-4">
           <div>
-            <h2 className="text-lg font-semibold text-ink">{t("reconciliationExports")}</h2>
-            <p className="mt-1 text-sm text-slate-600">{t("reconciliationExportsHelp")}</p>
+            <h2 className="section-title">{t("reconciliationExports")}</h2>
+            <p className="section-subtitle">{t("reconciliationExportsHelp")}</p>
           </div>
           <div className="mt-4 grid gap-2">
             <Button

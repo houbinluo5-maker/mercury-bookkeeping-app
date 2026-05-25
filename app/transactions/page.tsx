@@ -13,6 +13,7 @@ export default function TransactionsPage() {
     <div className="space-y-6">
       <PageHeader
         eyebrow={`${transactions.length} ${t("entries")}`}
+        description={t("transactionsPageDescription")}
         title={t("transactionsList")}
       />
       <TransactionsTable transactions={transactions} />

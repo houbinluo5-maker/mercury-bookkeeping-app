@@ -177,10 +177,11 @@ export default function TaxPackagePage() {
           </Button>
         }
         eyebrow={`${settings.entity_type} ${t("taxYear")} ${taxYear}`}
+        description={t("taxPackagePageDescription")}
         title={t("taxPackage")}
       />
 
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <section className="notice border-amber-200 bg-amber-50">
         <div className="flex gap-3">
           <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
           <p className="text-sm leading-6 text-amber-900">{t("taxPackageWarning")}</p>
@@ -189,24 +190,30 @@ export default function TaxPackagePage() {
 
       <ReconciliationLink descriptionKey="reconciliationCenterTaxPackageNotice" />
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={closedMonths.length ? "green" : "neutral"}>
-            {t("closedStatus")}: {closedMonths.length}
-          </Badge>
-          <Badge tone={reopenedMonths.length ? "amber" : "green"}>
-            {t("reopenedStatus")}: {reopenedMonths.length}
-          </Badge>
-          <Badge tone={changedClosedMonths.length ? "red" : "green"}>
-            {t("closedPeriodChangedWarning")}: {changedClosedMonths.length}
-          </Badge>
+      <section className="surface-card p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="section-title">{t("closingStatus")}</h2>
+            <p className="section-subtitle">{t("closingStatusHelp")}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge tone={closedMonths.length ? "green" : "neutral"}>
+              {t("closedStatus")}: {closedMonths.length}
+            </Badge>
+            <Badge tone={reopenedMonths.length ? "amber" : "green"}>
+              {t("reopenedStatus")}: {reopenedMonths.length}
+            </Badge>
+            <Badge tone={changedClosedMonths.length ? "red" : "green"}>
+              {t("closedPeriodChangedWarning")}: {changedClosedMonths.length}
+            </Badge>
+          </div>
         </div>
         {reopenedMonths.length ? (
           <p className="mt-3 text-sm text-amber-800">{t("periodIncludesReopenedMonths")}</p>
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card p-4">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <YearSelect onChange={updateTaxYear} value={taxYear} years={years} />
           <label className="space-y-1">
@@ -297,10 +304,10 @@ export default function TaxPackagePage() {
         ))}
       </section>
 
-      <section className="space-y-3 rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card space-y-3 p-4">
         <div>
-          <h2 className="text-lg font-semibold text-ink">{t("cpaExportFiles")}</h2>
-          <p className="mt-1 text-sm text-slate-600">{t("taxPackageExportsHelp")}</p>
+          <h2 className="section-title">{t("cpaExportFiles")}</h2>
+          <p className="section-subtitle">{t("taxPackageExportsHelp")}</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <Button onClick={() => downloadCsv(transactionLedgerHeaders, taxPackage.transactionRows, `${prefix}-ledger.csv`)}>
