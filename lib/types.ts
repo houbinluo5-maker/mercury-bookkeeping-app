@@ -25,6 +25,8 @@ export type AuditAction =
   | "dismiss_duplicate"
   | "note_change";
 
+export type MonthlyClosingStatus = "open" | "ready_to_close" | "closed" | "reopened";
+
 export type Transaction = {
   id: string;
   date: string;
@@ -81,9 +83,44 @@ export type AuditLog = {
   source: AuditSource;
 };
 
+export type MonthlyClosingSummaryJson = {
+  audit_log_count?: number;
+  backup_exported?: boolean;
+  checklist?: Record<string, boolean>;
+  closed_period_change_count?: number;
+  expenses: number;
+  missing_receipts_count: number;
+  needs_review_count: number;
+  net_income: number;
+  possible_duplicates_count: number;
+  revenue: number;
+  total_transactions: number;
+  uncategorized_count: number;
+  unreconciled_count: number;
+};
+
+export type MonthlyClosing = {
+  id: string;
+  year: number;
+  month: number;
+  period_start: string;
+  period_end: string;
+  status: MonthlyClosingStatus;
+  readiness_score: number;
+  closed_at: string | null;
+  closed_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  close_reason: string;
+  reopen_reason: string;
+  summary_json: MonthlyClosingSummaryJson;
+  created_at: string;
+  updated_at: string;
+};
+
 export type LocalBackup = {
   exported_at: string;
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   transactions: Transaction[];
   categories: Category[];
   receipts: Array<{
@@ -93,6 +130,7 @@ export type LocalBackup = {
     reconciled: boolean;
   }>;
   audit_logs: AuditLog[];
+  monthly_closings?: MonthlyClosing[];
   settings: AppSettings;
 };
 

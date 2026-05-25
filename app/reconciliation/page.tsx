@@ -9,7 +9,7 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
-import { promptOptionalAuditReason } from "@/lib/audit-reason";
+import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -29,6 +29,7 @@ import {
   type TransactionIssue
 } from "@/lib/reconciliation";
 import { downloadCsv } from "@/lib/tax-package";
+import { isDateInClosedPeriod } from "@/lib/monthly-closing";
 import { useBookkeeping } from "@/lib/storage";
 import type { AuditLog, Category, Transaction, TransactionDraft } from "@/lib/types";
 
@@ -124,6 +125,7 @@ function TransactionIssueRow({
   auditEntries,
   categoryLabel,
   categories,
+  closedPeriod,
   issue,
   onAddNote,
   onCategoryChange,
@@ -141,6 +143,7 @@ function TransactionIssueRow({
   auditEntries: AuditLog[];
   categoryLabel: (value: string) => string;
   categories: Category[];
+  closedPeriod: boolean;
   issue: TransactionIssue;
   onAddNote: (transaction: Transaction) => void;
   onCategoryChange: (transaction: Transaction, categoryName: string) => void;
@@ -174,6 +177,7 @@ function TransactionIssueRow({
             <IssueLevelBadge label={t(issue.level)} level={issue.level} />
             <ReceiptStatusBadge t={t} transaction={issue.transaction} />
             <ReconciliationStatusBadge t={t} transaction={issue.transaction} />
+            {closedPeriod ? <Badge tone="red">{t("closedPeriod")}</Badge> : null}
           </div>
           <div className="grid gap-1 text-sm text-slate-600 md:grid-cols-2">
             <p>
@@ -374,6 +378,7 @@ export default function ReconciliationPage() {
     bulkUpdateTransactions,
     categories,
     deleteTransaction,
+    monthlyClosings,
     settings,
     transactions,
     updateTransaction
@@ -427,8 +432,14 @@ export default function ReconciliationPage() {
     [categories]
   );
 
+  function promptReasonForTransaction(transaction: Transaction, labelKey: string) {
+    return isDateInClosedPeriod(monthlyClosings, transaction.date)
+      ? promptRequiredAuditReason(t, t(labelKey))
+      : promptOptionalAuditReason(t, t(labelKey));
+  }
+
   function updateCategory(transaction: Transaction, categoryName: string) {
-    const reason = promptOptionalAuditReason(t, t("category"));
+    const reason = promptReasonForTransaction(transaction, "category");
 
     if (reason === null) return;
 
@@ -462,19 +473,24 @@ export default function ReconciliationPage() {
   function addNote(transaction: Transaction) {
     const nextNotes = window.prompt(t("editNotePrompt"), transaction.notes);
     if (nextNotes === null) return;
+    const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
+      ? promptRequiredAuditReason(t, t("notes"))
+      : "";
+    if (reason === null) return;
     updateTransaction(
       transaction.id,
       { notes: nextNotes },
       {
         actionsByField: { notes: "note_change" },
         entityTypesByField: { notes: "reconciliation" },
+        reason,
         source: "manual"
       }
     );
   }
 
   function markReceiptNotRequired(transaction: Transaction) {
-    const reason = promptOptionalAuditReason(t, t("markReceiptNotRequired"));
+    const reason = promptReasonForTransaction(transaction, "markReceiptNotRequired");
 
     if (reason === null) return;
 
@@ -489,7 +505,7 @@ export default function ReconciliationPage() {
   }
 
   function markReconciled(transaction: Transaction) {
-    const reason = promptOptionalAuditReason(t, t("markReconciled"));
+    const reason = promptReasonForTransaction(transaction, "markReconciled");
 
     if (reason === null) return;
 
@@ -504,6 +520,10 @@ export default function ReconciliationPage() {
   }
 
   function markReviewResolved(transaction: Transaction) {
+    const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
+      ? promptRequiredAuditReason(t, t("markReviewResolved"))
+      : "";
+    if (reason === null) return;
     const nextCategory = categoriesByName.get(transaction.category);
     const patch: Partial<TransactionDraft> = {
       notes: appendReviewResolvedTag(clearReviewSignals(transaction.notes))
@@ -525,6 +545,7 @@ export default function ReconciliationPage() {
           source: "manual"
         }
       ],
+      reason,
       source: "manual"
     });
   }
@@ -534,12 +555,16 @@ export default function ReconciliationPage() {
     receiptLink: string,
     audit?: { action?: "delete_receipt" | "replace_receipt" | "upload_receipt"; reason?: string; source?: "receipt_upload" }
   ) {
+    const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
+      ? audit?.reason || promptRequiredAuditReason(t, t("receiptLink"))
+      : audit?.reason;
+    if (reason === null) return;
     updateTransaction(
       transaction.id,
       { receipt_link: receiptLink },
       {
         actionsByField: audit?.action ? { receipt_link: audit.action } : undefined,
-        reason: audit?.reason,
+        reason,
         source: audit?.source ?? "receipt_upload"
       }
     );
@@ -611,7 +636,9 @@ export default function ReconciliationPage() {
         )
       )
     ) {
-      const reason = promptOptionalAuditReason(t, t("deleteDuplicate"));
+      const reason = isDateInClosedPeriod(monthlyClosings, candidate.second.date)
+        ? promptRequiredAuditReason(t, t("deleteDuplicate"))
+        : promptOptionalAuditReason(t, t("deleteDuplicate"));
 
       if (reason === null) return;
 
@@ -990,6 +1017,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1022,6 +1050,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1054,6 +1083,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1084,6 +1114,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1143,6 +1174,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1174,6 +1206,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1207,6 +1240,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1238,6 +1272,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}
@@ -1269,6 +1304,7 @@ export default function ReconciliationPage() {
                   auditEntries={auditLogs.filter((entry) => entry.entity_id === issue.transaction.id)}
                   categoryLabel={categoryLabel}
                   categories={categories}
+                  closedPeriod={isDateInClosedPeriod(monthlyClosings, issue.transaction.date)}
                   issue={issue}
                   key={issue.id}
                   onAddNote={addNote}

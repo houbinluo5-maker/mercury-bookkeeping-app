@@ -9,6 +9,7 @@ import { TransactionEditModal } from "@/components/transaction-edit-modal";
 import { downloadExcel } from "@/lib/export-excel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
+import { isDateInClosedPeriod } from "@/lib/monthly-closing";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
 
@@ -19,7 +20,7 @@ export function TransactionsTable({
   transactions: Transaction[];
   compact?: boolean;
 }) {
-  const { categories } = useBookkeeping();
+  const { categories, monthlyClosings } = useBookkeeping();
   const { categoryLabel, t, taxLineLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -72,6 +73,9 @@ export function TransactionsTable({
         ) : (
           <Badge tone="neutral">{t("receiptOptional")}</Badge>
         )}
+        {isDateInClosedPeriod(monthlyClosings, transaction.date) ? (
+          <Badge tone="red">{t("closedPeriod")}</Badge>
+        ) : null}
       </div>
     );
   }

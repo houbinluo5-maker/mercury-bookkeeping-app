@@ -2,10 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isAuthenticatedRequest } from "@/lib/server-auth";
 import {
   isSupabaseConfigured,
-  loadSupabaseBackup,
-  replaceSupabaseBackup
+  loadSupabaseBackup
 } from "@/lib/supabase-server";
-import type { LocalBackup } from "@/lib/types";
+
+const fullSupabaseBackupWriteDisabledMessage =
+  "Full Supabase backup writes are disabled. Use protected ledger APIs for transaction writes.";
 
 function unauthorized() {
   return NextResponse.json(
@@ -70,35 +71,15 @@ export async function PUT(request: NextRequest) {
   if (!(await isAuthenticatedRequest(request))) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
-  try {
-    let backup: LocalBackup;
-
-    try {
-      backup = (await request.json()) as LocalBackup;
-    } catch {
-      return NextResponse.json(
-        {
-          apiStatus: 400,
-          apiStatusText: "Bad Request",
-          configured: true,
-          error: "Storage API expected a JSON backup payload.",
-          mode: "error"
-        },
-        { status: 400 }
-      );
-    }
-
-    const data = await replaceSupabaseBackup(backup);
-
-    return NextResponse.json({
-      apiStatus: 200,
-      apiStatusText: "OK",
+  return NextResponse.json(
+    {
+      apiStatus: 409,
+      apiStatusText: "Conflict",
       configured: true,
-      data,
-      mode: "supabase",
-      message: "Supabase synced."
-    });
-  } catch (error) {
-    return supabaseError(error);
-  }
+      error: fullSupabaseBackupWriteDisabledMessage,
+      mode: "error",
+      message: fullSupabaseBackupWriteDisabledMessage
+    },
+    { status: 409 }
+  );
 }

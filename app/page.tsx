@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Download, PlusCircle } from "lucide-react";
 import { Button, buttonClassName } from "@/components/button";
+import { Badge } from "@/components/badge";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ReconciliationLink } from "@/components/reconciliation-link";
@@ -14,11 +15,14 @@ import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 export default function DashboardPage() {
-  const { transactions, settings } = useBookkeeping();
+  const { monthlyClosings, transactions, settings } = useBookkeeping();
   const { t } = useI18n();
   const yearTransactions = filterByYear(transactions, settings.tax_year);
   const stats = getDashboardStats(yearTransactions);
   const recentTransactions = transactions.slice(0, 6);
+  const yearClosings = monthlyClosings.filter((closing) => closing.year === settings.tax_year);
+  const reopenedCount = yearClosings.filter((closing) => closing.status === "reopened").length;
+  const closedCount = yearClosings.filter((closing) => closing.status === "closed").length;
 
   return (
     <div className="space-y-6">
@@ -68,6 +72,20 @@ export default function DashboardPage() {
       </section>
 
       <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
+
+      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={closedCount ? "green" : "neutral"}>
+            {t("closedStatus")}: {closedCount}
+          </Badge>
+          <Badge tone={reopenedCount ? "amber" : "green"}>
+            {t("reopenedStatus")}: {reopenedCount}
+          </Badge>
+          {reopenedCount ? (
+            <span className="text-sm text-amber-800">{t("periodIncludesReopenedMonths")}</span>
+          ) : null}
+        </div>
+      </section>
 
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard
