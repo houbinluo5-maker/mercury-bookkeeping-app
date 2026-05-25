@@ -6,7 +6,7 @@ import {
 } from "@/lib/supabase-server";
 
 const fullSupabaseBackupWriteDisabledMessage =
-  "Full Supabase backup writes are disabled. Use protected ledger APIs for transaction writes.";
+  "Full Supabase backup writes are disabled in Supabase mode. Use server ledger APIs for transaction writes.";
 
 function unauthorized() {
   return NextResponse.json(
@@ -77,7 +77,7 @@ export async function PUT(request: NextRequest) {
       apiStatusText: "Conflict",
       configured: true,
       error: fullSupabaseBackupWriteDisabledMessage,
-      mode: "error",
+      mode: "supabase",
       message: fullSupabaseBackupWriteDisabledMessage
     },
     { status: 409 }

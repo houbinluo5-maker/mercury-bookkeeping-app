@@ -141,8 +141,23 @@ export type StorageStatus = {
   apiStatusText?: string;
   configured: boolean;
   error?: string;
+  lastCheckedAt?: string;
   mode: StorageMode;
   message: string;
+  notice?: string;
+  supabaseConnected?: boolean;
+  health?: SupabaseHealthCheck;
+};
+
+export type SupabaseHealthCheck = {
+  audit_logs: "ok" | "error";
+  checked_at: string;
+  connected: boolean;
+  error: string;
+  monthly_closings: "ok" | "missing" | "error";
+  service_role_key: "ok" | "missing" | "error";
+  supabase_url: "ok" | "missing";
+  transactions: "ok" | "error";
 };
 
 export type PeriodSummary = {

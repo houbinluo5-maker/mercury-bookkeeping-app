@@ -26,6 +26,7 @@ import type {
   LocalBackup,
   MonthlyClosing,
   MonthlyClosingSummaryJson,
+  SupabaseHealthCheck,
   Transaction
 } from "@/lib/types";
 
@@ -93,6 +94,10 @@ export function getSupabaseConfig(): SupabaseConfig | null {
 
 export function isSupabaseConfigured() {
   return Boolean(getSupabaseConfig());
+}
+
+function isMissingTableError(error: unknown) {
+  return error instanceof Error && /table is missing|does not exist|schema cache|42P01/i.test(error.message);
 }
 
 function normalizeSettings(settings: Partial<AppSettings> | null | undefined): AppSettings {
@@ -261,6 +266,87 @@ async function supabaseRequest<T>(
   }
 
   return responseBody as T;
+}
+
+async function checkTableReachable(config: SupabaseConfig, table: string) {
+  await supabaseRequest<unknown[]>(config, `${table}?select=*&limit=1`);
+}
+
+export async function checkSupabaseHealth(): Promise<SupabaseHealthCheck> {
+  const checkedAt = new Date().toISOString();
+  const url = process.env.SUPABASE_URL?.trim();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!url || !serviceRoleKey) {
+    return {
+      audit_logs: "error",
+      checked_at: checkedAt,
+      connected: false,
+      error: !url
+        ? "SUPABASE_URL is not configured."
+        : "SUPABASE_SERVICE_ROLE_KEY is not configured.",
+      monthly_closings: "error",
+      service_role_key: serviceRoleKey ? "ok" : "missing",
+      supabase_url: url ? "ok" : "missing",
+      transactions: "error"
+    };
+  }
+
+  const config = {
+    serviceRoleKey,
+    url: normalizeSupabaseUrl(url)
+  };
+  const health: SupabaseHealthCheck = {
+    audit_logs: "error",
+    checked_at: checkedAt,
+    connected: false,
+    error: "",
+    monthly_closings: "error",
+    service_role_key: "ok",
+    supabase_url: "ok",
+    transactions: "error"
+  };
+  const errors: string[] = [];
+
+  try {
+    await checkTableReachable(config, "transactions");
+    health.transactions = "ok";
+  } catch (error) {
+    health.service_role_key = /service role key|api key|jwt|token|signature/i.test(
+      error instanceof Error ? error.message : ""
+    )
+      ? "error"
+      : health.service_role_key;
+    errors.push(error instanceof Error ? error.message : "Transactions table check failed.");
+  }
+
+  try {
+    await checkTableReachable(config, "audit_logs");
+    health.audit_logs = "ok";
+  } catch (error) {
+    errors.push(error instanceof Error ? error.message : "Audit logs table check failed.");
+  }
+
+  try {
+    await checkTableReachable(config, "monthly_closings");
+    health.monthly_closings = "ok";
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      health.monthly_closings = "missing";
+    } else {
+      errors.push(error instanceof Error ? error.message : "Monthly closings table check failed.");
+    }
+  }
+
+  health.connected =
+    health.supabase_url === "ok" &&
+    health.service_role_key === "ok" &&
+    health.transactions === "ok" &&
+    health.audit_logs === "ok" &&
+    (health.monthly_closings === "ok" || health.monthly_closings === "missing");
+  health.error = errors.join(" ");
+
+  return health;
 }
 
 async function upsertRows<T extends object>(
