@@ -41,6 +41,7 @@ import type {
   MonthlyClosing,
   MonthlyClosingSummaryJson,
   StorageStatus,
+  SupabaseHealthCheck,
   Transaction,
   TransactionDraft
 } from "@/lib/types";
@@ -84,6 +85,7 @@ type BookkeepingContextValue = {
   syncToSupabase: () => Promise<boolean>;
   loadFromSupabase: () => Promise<boolean>;
   migrateLocalDataToSupabase: () => Promise<boolean>;
+  checkStorageHealth: () => Promise<boolean>;
   loadMonthlyClosings: () => Promise<boolean>;
   closeMonth: (
     year: number,
@@ -107,6 +109,8 @@ type StorageApiResponse = {
   error?: string;
   message?: string;
   mode: StorageStatus["mode"];
+  notice?: string;
+  supabaseConnected?: boolean;
 };
 
 type AuditApiResponse = {
@@ -114,6 +118,16 @@ type AuditApiResponse = {
   apiStatusText?: string;
   configured: boolean;
   data?: AuditLog[];
+  error?: string;
+  message?: string;
+  mode: StorageStatus["mode"];
+};
+
+type StorageHealthApiResponse = {
+  apiStatus?: number;
+  apiStatusText?: string;
+  configured: boolean;
+  data?: SupabaseHealthCheck;
   error?: string;
   message?: string;
   mode: StorageStatus["mode"];
@@ -166,6 +180,8 @@ const checkingStorageStatus: StorageStatus = {
 
 const fullSupabaseSyncBlockedMessage =
   "Full Supabase backup writes are disabled in Supabase mode. Use server ledger APIs for transaction writes.";
+const fullSupabaseSyncDisabledNotice =
+  "Full backup sync is disabled in Supabase mode to protect database integrity. Use normal transaction, receipt, import, and ledger APIs.";
 
 const BookkeepingContext = createContext<BookkeepingContextValue | null>(null);
 
@@ -360,6 +376,18 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       if (!response.ok) {
         const detail = result.error || result.message || "Storage request failed.";
 
+        if (response.status === 409 && detail === fullSupabaseSyncBlockedMessage) {
+          return {
+            ...result,
+            apiStatus: result.apiStatus ?? response.status,
+            apiStatusText: result.apiStatusText ?? response.statusText,
+            configured: true,
+            mode: "supabase",
+            notice: fullSupabaseSyncDisabledNotice,
+            supabaseConnected: true
+          };
+        }
+
         throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
       }
 
@@ -420,6 +448,50 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     },
     []
   );
+
+  const requestStorageHealth = useCallback(async (): Promise<StorageHealthApiResponse> => {
+    const response = await fetch("/api/storage/health", {
+      method: "GET"
+    });
+    const responseText = await response.text();
+    let result: StorageHealthApiResponse | null = null;
+
+    if (responseText.trim()) {
+      try {
+        result = JSON.parse(responseText) as StorageHealthApiResponse;
+      } catch {
+        throw new Error(
+          `Storage health API returned invalid JSON. HTTP ${response.status} ${response.statusText}. ${responseText.slice(0, 240)}`
+        );
+      }
+    }
+
+    if (!result && !response.ok) {
+      throw new Error(`Storage health API request failed. HTTP ${response.status} ${response.statusText}.`);
+    }
+
+    if (!result) {
+      return {
+        apiStatus: response.status,
+        apiStatusText: response.statusText,
+        configured: false,
+        message: "Storage health API returned an empty successful response.",
+        mode: "local"
+      };
+    }
+
+    if (!response.ok) {
+      const detail = result.error || result.message || "Storage health check failed.";
+
+      throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
+    }
+
+    return {
+      ...result,
+      apiStatus: result.apiStatus ?? response.status,
+      apiStatusText: result.apiStatusText ?? response.statusText
+    };
+  }, []);
 
   const requestLedgerTransaction = useCallback(
     async (payload: Record<string, unknown>): Promise<LedgerTransactionApiResponse> => {
@@ -567,8 +639,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       apiStatus: result.apiStatus,
       apiStatusText: result.apiStatusText,
       configured: true,
+      lastCheckedAt: new Date().toISOString(),
       mode: "supabase",
-      message: result.message || "Supabase transaction synced."
+      message: result.message || "Supabase transaction synced.",
+      notice: fullSupabaseSyncDisabledNotice,
+      supabaseConnected: true
     });
     return true;
   }, []);
@@ -604,8 +679,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       apiStatus: result.apiStatus,
       apiStatusText: result.apiStatusText,
       configured: true,
+      lastCheckedAt: new Date().toISOString(),
       mode: "supabase",
-      message: result.message || "Supabase monthly closing synced."
+      message: result.message || "Supabase monthly closing synced.",
+      notice: fullSupabaseSyncDisabledNotice,
+      supabaseConnected: true
     });
     return true;
   }, []);
@@ -647,6 +725,42 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     }
   }, [requestAudit]);
 
+  const checkStorageHealth = useCallback(async () => {
+    try {
+      const result = await requestStorageHealth();
+      const checkedAt = result.data?.checked_at ?? new Date().toISOString();
+
+      setStorageStatus({
+        apiStatus: result.apiStatus,
+        apiStatusText: result.apiStatusText,
+        configured: result.configured,
+        error: result.error || result.data?.error || undefined,
+        health: result.data,
+        lastCheckedAt: checkedAt,
+        mode: result.data?.connected ? "supabase" : "local",
+        message: result.data?.connected
+          ? "Supabase connected."
+          : result.message || result.data?.error || "Supabase is not connected.",
+        notice: result.data?.connected ? fullSupabaseSyncDisabledNotice : undefined,
+        supabaseConnected: Boolean(result.data?.connected)
+      });
+
+      return Boolean(result.data?.connected);
+    } catch (error) {
+      setStorageStatus({
+        apiStatus: 0,
+        apiStatusText: "Client error",
+        configured: false,
+        error: error instanceof Error ? error.message : "Supabase health check failed.",
+        lastCheckedAt: new Date().toISOString(),
+        mode: "error",
+        message: error instanceof Error ? error.message : "Supabase health check failed.",
+        supabaseConnected: false
+      });
+      return false;
+    }
+  }, [requestStorageHealth]);
+
   const loadMonthlyClosings = useCallback(async () => {
     try {
       const result = await requestMonthlyClosing();
@@ -681,8 +795,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         apiStatus: result.apiStatus,
         apiStatusText: result.apiStatusText,
         configured: true,
+        lastCheckedAt: new Date().toISOString(),
         mode: "supabase",
-        message: result.message || "Supabase connected."
+        message: result.message || "Supabase connected.",
+        notice: fullSupabaseSyncDisabledNotice,
+        supabaseConnected: true
       });
       void loadAuditTrail();
       void loadMonthlyClosings();
@@ -693,8 +810,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         apiStatusText: "Client error",
         configured: true,
         error: error instanceof Error ? error.message : "Supabase request failed.",
+        lastCheckedAt: new Date().toISOString(),
         mode: "error",
-        message: error instanceof Error ? error.message : "Supabase request failed."
+        message: error instanceof Error ? error.message : "Supabase request failed.",
+        supabaseConnected: false
       });
       return false;
     }
@@ -723,8 +842,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           apiStatus: result.apiStatus,
           apiStatusText: result.apiStatusText,
           configured: true,
+          lastCheckedAt: new Date().toISOString(),
           mode: "supabase",
-          message: result.message || "Supabase synced."
+          message: result.message || "Supabase synced.",
+          notice: result.notice || fullSupabaseSyncDisabledNotice,
+          supabaseConnected: true
         });
         return true;
       } catch (error) {
@@ -733,8 +855,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           apiStatusText: "Client error",
           configured: true,
           error: error instanceof Error ? error.message : "Supabase sync failed.",
+          lastCheckedAt: new Date().toISOString(),
           mode: "error",
-          message: error instanceof Error ? error.message : "Supabase sync failed."
+          message: error instanceof Error ? error.message : "Supabase sync failed.",
+          supabaseConnected: false
         });
         return false;
       }
@@ -784,9 +908,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       apiStatus: 409,
       apiStatusText: "Conflict",
       configured: true,
-      error: fullSupabaseSyncBlockedMessage,
-      mode: "error",
-      message: fullSupabaseSyncBlockedMessage
+      mode: "supabase",
+      message: "Supabase connected.",
+      notice: fullSupabaseSyncDisabledNotice,
+      supabaseConnected: true,
+      lastCheckedAt: new Date().toISOString()
     });
     return false;
   }, []);
@@ -1571,18 +1697,19 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       setSettings(normalized.settings);
       setAuditLogs(nextAuditLogs);
       setMonthlyClosings(normalizeMonthlyClosings(normalized.monthly_closings));
-      maybeSyncToSupabase(
-        createBackup(
-          normalized.transactions,
-          normalized.categories,
-          normalized.settings,
-          nextAuditLogs,
-          normalizeMonthlyClosings(normalized.monthly_closings)
-        ),
-        nextAuditLogs
-      );
+      setStorageStatus((current) => ({
+        apiStatus: 200,
+        apiStatusText: "OK",
+        configured: current.configured,
+        lastCheckedAt: new Date().toISOString(),
+        mode: "local",
+        message:
+          "Imported backup into local draft mode. Supabase writes remain disabled until data is migrated through safe APIs.",
+        notice: current.supabaseConnected ? fullSupabaseSyncDisabledNotice : undefined,
+        supabaseConnected: current.supabaseConnected
+      }));
     },
-    [auditLogs, maybeSyncToSupabase]
+    [auditLogs]
   );
 
   const value = useMemo<BookkeepingContextValue>(
@@ -1606,6 +1733,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       syncToSupabase,
       loadFromSupabase,
       migrateLocalDataToSupabase,
+      checkStorageHealth,
       loadMonthlyClosings,
       closeMonth,
       reopenMonth,
@@ -1621,6 +1749,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       exportBackup,
       importTransactions,
       importBackup,
+      checkStorageHealth,
       loadFromSupabase,
       loadMonthlyClosings,
       migrateLocalDataToSupabase,
