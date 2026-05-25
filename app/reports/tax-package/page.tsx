@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Download, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/button";
+import { Badge } from "@/components/badge";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { YearSelect } from "@/components/period-selectors";
@@ -10,6 +11,7 @@ import { ReconciliationLink } from "@/components/reconciliation-link";
 import { getAvailableYears } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
+import { dateInPeriod } from "@/lib/monthly-closing";
 import { useBookkeeping } from "@/lib/storage";
 import {
   buildTaxPackageData,
@@ -38,7 +40,7 @@ function filePrefix(year: number, startDate: string, endDate: string) {
 }
 
 export default function TaxPackagePage() {
-  const { categories, settings, transactions } = useBookkeeping();
+  const { auditLogs, categories, monthlyClosings, settings, transactions } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const years = useMemo(
     () => Array.from(new Set([...getAvailableYears(transactions), settings.tax_year])).sort((a, b) => b - a),
@@ -70,6 +72,16 @@ export default function TaxPackagePage() {
     [categories, filters, transactions]
   );
   const prefix = filePrefix(taxYear, startDate, endDate);
+  const includedClosings = monthlyClosings.filter(
+    (closing) => closing.period_end >= startDate && closing.period_start <= endDate
+  );
+  const reopenedMonths = includedClosings.filter((closing) => closing.status === "reopened");
+  const closedMonths = includedClosings.filter((closing) => closing.status === "closed");
+  const changedClosedMonths = closedMonths.filter(
+    (closing) =>
+      closing.closed_at &&
+      auditLogChangedClosedPeriod(closing.closed_at, closing.period_start, closing.period_end)
+  );
   const summaryCards = [
     ["grossRevenue", formatCurrency(taxPackage.summary.grossRevenue, settings.default_currency), "green"],
     [
@@ -138,6 +150,20 @@ export default function TaxPackagePage() {
     setEndDate(yearEnd(year));
   }
 
+  function auditLogChangedClosedPeriod(closedAt: string, periodStart: string, periodEnd: string) {
+    const transactionIds = new Set(
+      taxPackage.filteredTransactions
+        .filter((transaction) =>
+          dateInPeriod(transaction.date, { period_start: periodStart, period_end: periodEnd })
+        )
+        .map((transaction) => transaction.id)
+    );
+
+    return auditLogs.some(
+      (entry) => entry.created_at > closedAt && transactionIds.has(entry.entity_id)
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -162,6 +188,23 @@ export default function TaxPackagePage() {
       </section>
 
       <ReconciliationLink descriptionKey="reconciliationCenterTaxPackageNotice" />
+
+      <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={closedMonths.length ? "green" : "neutral"}>
+            {t("closedStatus")}: {closedMonths.length}
+          </Badge>
+          <Badge tone={reopenedMonths.length ? "amber" : "green"}>
+            {t("reopenedStatus")}: {reopenedMonths.length}
+          </Badge>
+          <Badge tone={changedClosedMonths.length ? "red" : "green"}>
+            {t("closedPeriodChangedWarning")}: {changedClosedMonths.length}
+          </Badge>
+        </div>
+        {reopenedMonths.length ? (
+          <p className="mt-3 text-sm text-amber-800">{t("periodIncludesReopenedMonths")}</p>
+        ) : null}
+      </section>
 
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

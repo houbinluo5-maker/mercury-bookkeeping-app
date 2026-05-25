@@ -7,7 +7,8 @@ import { Button } from "@/components/button";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import { promptOptionalAuditReason } from "@/lib/audit-reason";
+import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
+import { isDateInClosedPeriod } from "@/lib/monthly-closing";
 import { isExpenseReceiptCategory } from "@/lib/receipt-requirements";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction } from "@/lib/types";
@@ -22,7 +23,7 @@ const filters = [
 ];
 
 export function ReceiptTable() {
-  const { auditLogs, categories, transactions, updateTransaction } = useBookkeeping();
+  const { auditLogs, categories, monthlyClosings, transactions, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [filter, setFilter] = useState("receiptMissing");
   const [receiptDrafts, setReceiptDrafts] = useState<Record<string, string>>({});
@@ -83,7 +84,9 @@ export function ReceiptTable() {
     let reason = "";
 
     if (transaction.receipt_link && !nextValue) {
-      const response = promptOptionalAuditReason(t, t("deleteReceipt"));
+      const response = isDateInClosedPeriod(monthlyClosings, transaction.date)
+        ? promptRequiredAuditReason(t, t("deleteReceipt"))
+        : promptOptionalAuditReason(t, t("deleteReceipt"));
 
       if (response === null) {
         setReceiptDrafts((current) => ({ ...current, [transaction.id]: transaction.receipt_link }));
@@ -253,6 +256,9 @@ export function ReceiptTable() {
                       <div className="flex flex-wrap gap-2">
                         <ReceiptStatus transaction={transaction} />
                         <ReconciliationStatus transaction={transaction} />
+                        {isDateInClosedPeriod(monthlyClosings, transaction.date) ? (
+                          <Badge tone="red">{t("closedPeriod")}</Badge>
+                        ) : null}
                       </div>
                     </td>
                   </tr>

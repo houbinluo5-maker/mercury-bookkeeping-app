@@ -22,6 +22,7 @@ Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry
 - Categories / Chart of Accounts
 - Receipts tracker with inline receipt link updates and Supabase Storage receipt uploads
 - Reconciliation Center for monthly close review, duplicate candidates, readiness scoring, and CPA issue exports
+- Monthly Closing / locked accounting periods with close/reopen reasons, status badges, and CSV exports
 - Audit Trail page with filters, CSV export, and inline change history in transaction, receipt, and reconciliation views
 - Monthly Report
 - Quarterly Report
@@ -120,6 +121,20 @@ Imported bank transactions default to `Reconciled` because they come from bank a
 ### Review Needs Review Rows
 
 After importing, check the import summary for `Rows needing review`. Then open Transactions and filter/search for `Uncategorized` or `Needs review`. Update the category and tax line, add receipt links where required, and keep supporting documents such as invoices, bills, bank statements, or payment confirmations.
+
+## Monthly Closing
+
+Open `Monthly Closing` to review each month in the selected tax year, including transaction totals, revenue, expenses, net income, missing receipts, needs review, uncategorized, unreconciled, duplicate candidates, readiness score, and close status.
+
+Use Reconciliation Center before closing a month. Clear missing required receipts, needs-review items, uncategorized transactions, unreconciled transactions, and unresolved duplicate candidates. Review the Tax Package summary and export a backup before closing.
+
+After a month is closed, transactions dated inside that period show a `Closed period` badge. Sensitive edits to date, amounts, category, tax line, receipt fields, reconciliation status, source, vendor, description, or notes require a reason. The app saves field-level audit logs with old value, new value, actor, source, and reason.
+
+Closed months can be reopened only with a required reason. Reopened periods are shown in reports and Tax Package because they may need CPA review before relying on exports.
+
+Monthly closing adds CSV exports for closing summaries, closed-period changes, and closing checklists. These exports support CPA review but do not replace professional accounting judgment.
+
+Disclaimer: this app organizes bookkeeping data and audit history. It is not tax, legal, accounting, or financial advice. Have a qualified professional review records before filing or relying on reports.
 
 ## Getting Started
 

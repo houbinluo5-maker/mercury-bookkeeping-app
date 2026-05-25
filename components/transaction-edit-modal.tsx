@@ -6,8 +6,12 @@ import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
-import { promptOptionalAuditReason } from "@/lib/audit-reason";
+import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
 import { useI18n } from "@/lib/i18n";
+import {
+  isDateInClosedPeriod,
+  requiresClosedPeriodReason
+} from "@/lib/monthly-closing";
 import { accountOptions, sourceOptions } from "@/lib/seed-data";
 import { useBookkeeping } from "@/lib/storage";
 import type { Transaction, TransactionDraft } from "@/lib/types";
@@ -27,7 +31,7 @@ export function TransactionEditModal({
   transaction: Transaction | null;
   onClose: () => void;
 }) {
-  const { auditLogs, categories, deleteTransaction, updateTransaction } = useBookkeeping();
+  const { auditLogs, categories, deleteTransaction, monthlyClosings, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [draft, setDraft] = useState<Transaction | null>(transaction);
 
@@ -53,9 +57,16 @@ export function TransactionEditModal({
     if (valuesMatch(originalValue, value)) return;
 
     let reason = options.reason;
+    const closedPeriodReasonRequired = requiresClosedPeriodReason(
+      monthlyClosings,
+      currentTransaction,
+      { [key]: value } as Partial<TransactionDraft>
+    );
 
-    if (!reason && options.promptKey) {
-      const response = promptOptionalAuditReason(t, t(options.promptKey));
+    if (!reason && (options.promptKey || closedPeriodReasonRequired)) {
+      const response = closedPeriodReasonRequired
+        ? promptRequiredAuditReason(t, t(options.promptKey ?? "closedPeriod"))
+        : promptOptionalAuditReason(t, t(options.promptKey!));
 
       if (response === null) {
         setDraftField(key, currentTransaction[key] as Transaction[K]);
@@ -77,7 +88,9 @@ export function TransactionEditModal({
 
   function onCategoryChange(categoryName: string) {
     const category = categories.find((item) => item.name === categoryName);
-    const reason = promptOptionalAuditReason(t, t("category"));
+    const reason = isDateInClosedPeriod(monthlyClosings, currentTransaction.date)
+      ? promptRequiredAuditReason(t, t("category"))
+      : promptOptionalAuditReason(t, t("category"));
 
     if (reason === null) {
       setDraftField("category", currentTransaction.category);
@@ -111,9 +124,13 @@ export function TransactionEditModal({
   }
 
   function deleteCurrentTransaction() {
-    if (!window.confirm(t("deleteTransactionQuestion"))) return;
+    const isClosedPeriod = isDateInClosedPeriod(monthlyClosings, currentTransaction.date);
 
-    const reason = promptOptionalAuditReason(t, t("deleteTransaction"));
+    if (!window.confirm(isClosedPeriod ? t("closedPeriodDeleteWarning") : t("deleteTransactionQuestion"))) return;
+
+    const reason = isClosedPeriod
+      ? promptRequiredAuditReason(t, t("deleteTransaction"))
+      : promptOptionalAuditReason(t, t("deleteTransaction"));
 
     if (reason === null) return;
 
@@ -131,6 +148,9 @@ export function TransactionEditModal({
               <Badge tone={currentTransaction.reconciled ? "green" : "amber"}>
                 {currentTransaction.reconciled ? t("reconciled") : t("needsReconciliation")}
               </Badge>
+              {isDateInClosedPeriod(monthlyClosings, currentTransaction.date) ? (
+                <Badge tone="red">{t("closedPeriod")}</Badge>
+              ) : null}
             </div>
             <p className="mt-1 text-sm text-slate-600">{t("changesSaveImmediately")}</p>
           </div>

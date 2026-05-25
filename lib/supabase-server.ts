@@ -1,10 +1,33 @@
-import { normalizeAuditLogs } from "@/lib/audit";
+import {
+  buildTransactionAuditLogs,
+  createAuditEntry,
+  normalizeAuditLogs,
+  transactionSummary,
+  type TransactionAuditOptions
+} from "@/lib/audit";
+import {
+  changedSensitiveFields,
+  monthlyClosingId,
+  monthPeriod,
+  normalizeMonthlyClosing,
+  normalizeMonthlyClosings
+} from "@/lib/monthly-closing";
 import { categories as seedCategories, defaultSettings } from "@/lib/seed-data";
 import {
   getReceiptRequiredDefault,
   normalizeCategoryReceiptDefault
 } from "@/lib/receipt-requirements";
-import type { AppSettings, AuditLog, Category, LocalBackup, Transaction } from "@/lib/types";
+import type {
+  AppSettings,
+  AuditActor,
+  AuditLog,
+  AuditSource,
+  Category,
+  LocalBackup,
+  MonthlyClosing,
+  MonthlyClosingSummaryJson,
+  Transaction
+} from "@/lib/types";
 
 type SupabaseConfig = {
   serviceRoleKey: string;
@@ -31,6 +54,19 @@ type ReceiptRow = {
 };
 
 type AuditLogRow = AuditLog;
+type MonthlyClosingRow = MonthlyClosing;
+
+type TransactionCreateAuditOptions = {
+  actor?: AuditActor;
+  reason?: string;
+  source?: AuditSource;
+};
+
+type TransactionWriteResult = {
+  audit_logs: AuditLog[];
+  transaction?: Transaction;
+  transactions?: Transaction[];
+};
 
 type SupabaseErrorBody = {
   code?: string;
@@ -119,43 +155,6 @@ function normalizeCategories(categories: Partial<Category>[] | null | undefined)
   return [...mergedKnownCategories, ...customCategories];
 }
 
-function normalizeBackup(backup: Partial<LocalBackup>): LocalBackup {
-  const transactions = Array.isArray(backup.transactions)
-    ? backup.transactions.map((transaction) => normalizeTransaction(transaction))
-    : [];
-
-  return {
-    exported_at: backup.exported_at || new Date().toISOString(),
-    version: 2,
-    transactions,
-    categories: normalizeCategories(backup.categories),
-    receipts: Array.isArray(backup.receipts)
-      ? backup.receipts
-      : transactions.map((transaction) => ({
-          transaction_id: transaction.id,
-          receipt_required: transaction.receipt_required,
-          receipt_link: transaction.receipt_link,
-          reconciled: transaction.reconciled
-        })),
-    audit_logs: normalizeAuditLogs(backup.audit_logs),
-    settings: normalizeSettings(backup.settings)
-  };
-}
-
-function toSettingsRow(settings: AppSettings): CompanySettingsRow {
-  return {
-    id: "default",
-    company_name: settings.company_name,
-    tax_year: settings.tax_year,
-    default_currency: settings.default_currency,
-    default_account_name: settings.default_account,
-    bookkeeping_method: settings.bookkeeping_method,
-    business_type: settings.entity_type,
-    tax_notes: settings.business_type_tax_notes,
-    language: settings.language
-  };
-}
-
 function fromSettingsRow(row: Partial<CompanySettingsRow> | null | undefined): AppSettings {
   if (!row) return defaultSettings;
 
@@ -208,7 +207,7 @@ function describeSupabaseError(status: number, statusText: string, body: unknown
   }
 
   if (code === "42P01" || /relation .* does not exist|does not exist|schema cache/.test(combined)) {
-    return `Supabase table is missing. Run supabase/migrations/202605230001_bookkeeping_schema.sql and supabase/migrations/202605240001_audit_logs.sql in the Supabase SQL editor. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
+    return `Supabase table is missing. Run the SQL migrations in supabase/migrations, including monthly_closings, in the Supabase SQL editor. HTTP ${status} ${statusText}.${suffix ? ` ${suffix}` : ""}`;
   }
 
   if (!message && !details && !hint) {
@@ -264,15 +263,6 @@ async function supabaseRequest<T>(
   return responseBody as T;
 }
 
-async function deleteAllRows(config: SupabaseConfig, table: string, column: string) {
-  await supabaseRequest(config, `${table}?${column}=not.is.null`, {
-    method: "DELETE",
-    headers: {
-      Prefer: "return=minimal"
-    }
-  });
-}
-
 async function upsertRows<T extends object>(
   config: SupabaseConfig,
   table: string,
@@ -290,14 +280,392 @@ async function upsertRows<T extends object>(
   });
 }
 
-async function upsertSettings(config: SupabaseConfig, settings: AppSettings) {
-  await supabaseRequest(config, "company_settings?on_conflict=id", {
+async function insertRows<T extends object>(config: SupabaseConfig, table: string, rows: T[]) {
+  if (!rows.length) return;
+
+  await supabaseRequest(config, table, {
     method: "POST",
-    body: JSON.stringify(toSettingsRow(settings)),
+    body: JSON.stringify(rows),
     headers: {
-      Prefer: "resolution=merge-duplicates,return=minimal"
+      Prefer: "return=minimal"
     }
   });
+}
+
+async function insertIgnoreRows<T extends object>(
+  config: SupabaseConfig,
+  table: string,
+  rows: T[],
+  conflictColumn: string
+) {
+  if (!rows.length) return;
+
+  await supabaseRequest(config, `${table}?on_conflict=${conflictColumn}`, {
+    method: "POST",
+    body: JSON.stringify(rows),
+    headers: {
+      Prefer: "resolution=ignore-duplicates,return=minimal"
+    }
+  });
+}
+
+async function loadSupabaseTransactionById(config: SupabaseConfig, id: string) {
+  const rows = await supabaseRequest<Transaction[]>(
+    config,
+    `transactions?select=*&id=eq.${encodeURIComponent(id)}&limit=1`
+  );
+
+  return rows[0] ? normalizeTransaction(rows[0]) : null;
+}
+
+async function loadMonthlyClosingById(config: SupabaseConfig, id: string) {
+  const rows = await supabaseRequest<MonthlyClosingRow[]>(
+    config,
+    `monthly_closings?select=*&id=eq.${encodeURIComponent(id)}&limit=1`
+  );
+
+  return rows[0] ? normalizeMonthlyClosing(rows[0]) : null;
+}
+
+async function loadMonthlyClosingForDate(config: SupabaseConfig, date: string) {
+  const rows = await supabaseRequest<MonthlyClosingRow[]>(
+    config,
+    `monthly_closings?select=*&period_start=lte.${encodeURIComponent(date)}&period_end=gte.${encodeURIComponent(date)}&limit=1`
+  );
+
+  return rows[0] ? normalizeMonthlyClosing(rows[0]) : null;
+}
+
+async function upsertMonthlyClosing(config: SupabaseConfig, closing: MonthlyClosing) {
+  const rows = await supabaseRequest<MonthlyClosingRow[]>(
+    config,
+    "monthly_closings?on_conflict=id&select=*",
+    {
+      method: "POST",
+      body: JSON.stringify(closing),
+      headers: {
+        Prefer: "resolution=merge-duplicates,return=representation"
+      }
+    }
+  );
+
+  return normalizeMonthlyClosing(rows[0] ?? closing);
+}
+
+async function assertClosedPeriodReason(
+  config: SupabaseConfig,
+  previous: Transaction,
+  patch: Partial<Transaction>,
+  audit: TransactionAuditOptions
+) {
+  const sensitiveFields = changedSensitiveFields(patch);
+
+  if (!sensitiveFields.length) return;
+
+  const [previousClosing, nextClosing] = await Promise.all([
+    loadMonthlyClosingForDate(config, previous.date),
+    typeof patch.date === "string" ? loadMonthlyClosingForDate(config, patch.date) : null
+  ]);
+  const touchesClosedPeriod =
+    previousClosing?.status === "closed" || nextClosing?.status === "closed";
+
+  if (touchesClosedPeriod && !audit.reason?.trim()) {
+    throw new Error("Closed-period changes require an audit reason.");
+  }
+}
+
+async function insertTransaction(config: SupabaseConfig, transaction: Transaction) {
+  const rows = await supabaseRequest<Transaction[]>(config, "transactions?select=*", {
+    method: "POST",
+    body: JSON.stringify(transaction),
+    headers: {
+      Prefer: "return=representation"
+    }
+  });
+
+  return normalizeTransaction(rows[0] ?? transaction);
+}
+
+async function patchTransaction(
+  config: SupabaseConfig,
+  id: string,
+  patch: Partial<Transaction>
+) {
+  const rows = await supabaseRequest<Transaction[]>(
+    config,
+    `transactions?id=eq.${encodeURIComponent(id)}&select=*`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+      headers: {
+        Prefer: "return=representation"
+      }
+    }
+  );
+
+  if (!rows[0]) {
+    throw new Error("Transaction was not found.");
+  }
+
+  return normalizeTransaction(rows[0]);
+}
+
+async function deleteTransactionRow(config: SupabaseConfig, id: string) {
+  const rows = await supabaseRequest<Transaction[]>(
+    config,
+    `transactions?id=eq.${encodeURIComponent(id)}&select=*`,
+    {
+      method: "DELETE",
+      headers: {
+        Prefer: "return=representation"
+      }
+    }
+  );
+
+  return rows.map((transaction) => normalizeTransaction(transaction));
+}
+
+async function upsertReceiptRow(config: SupabaseConfig, transaction: Transaction) {
+  await upsertRows(config, "receipts", toReceiptRows([transaction]), "transaction_id");
+}
+
+async function insertRequiredAuditLogs(config: SupabaseConfig, auditLogs: AuditLog[]) {
+  const normalizedLogs = normalizeAuditLogs(auditLogs);
+
+  if (!normalizedLogs.length) {
+    throw new Error("Transaction write did not create an audit log.");
+  }
+
+  const rows = await supabaseRequest<AuditLog[]>(config, "audit_logs?select=*", {
+    method: "POST",
+    body: JSON.stringify(normalizedLogs),
+    headers: {
+      Prefer: "return=representation"
+    }
+  });
+
+  if (rows.length !== normalizedLogs.length) {
+    throw new Error("Supabase did not persist every required audit log.");
+  }
+}
+
+function describeUnknownError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error.";
+}
+
+function failedWriteMessage(action: string, error: unknown, rollbackError?: unknown) {
+  const rollbackMessage = rollbackError
+    ? ` Rollback also failed: ${describeUnknownError(rollbackError)}`
+    : "";
+
+  return `${action} failed after a partial Supabase write. ${describeUnknownError(error)}${rollbackMessage}`;
+}
+
+export async function createSupabaseTransaction(
+  transaction: Transaction,
+  audit: TransactionCreateAuditOptions = {}
+): Promise<TransactionWriteResult> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const normalized = normalizeTransaction(transaction);
+  let created: Transaction | null = null;
+  const auditLogs = [
+    createAuditEntry({
+      action: "create",
+      actor: audit.actor ?? "admin",
+      created_at: new Date().toISOString(),
+      entity_id: normalized.id,
+      entity_type: "transaction",
+      field_name: "",
+      new_value: transactionSummary(normalized),
+      old_value: "",
+      reason: audit.reason || "",
+      source: audit.source ?? "manual"
+    })
+  ];
+
+  try {
+    created = await insertTransaction(config, normalized);
+    await upsertReceiptRow(config, created);
+    await insertRequiredAuditLogs(config, auditLogs);
+  } catch (error) {
+    if (!created) throw error;
+
+    try {
+      await deleteTransactionRow(config, created.id);
+    } catch (rollbackError) {
+      throw new Error(failedWriteMessage("Transaction create", error, rollbackError));
+    }
+
+    throw new Error(failedWriteMessage("Transaction create", error));
+  }
+
+  return { audit_logs: auditLogs, transaction: created };
+}
+
+export async function updateSupabaseTransaction(
+  id: string,
+  patch: Partial<Transaction>,
+  audit: TransactionAuditOptions = {}
+): Promise<TransactionWriteResult> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const previous = await loadSupabaseTransactionById(config, id);
+
+  if (!previous) {
+    throw new Error("Transaction was not found.");
+  }
+
+  await assertClosedPeriodReason(config, previous, patch, audit);
+
+  const timestamp = new Date().toISOString();
+  const preview = normalizeTransaction({
+    ...previous,
+    ...patch,
+    updated_at: previous.updated_at
+  });
+  const previewAuditLogs = buildTransactionAuditLogs(previous, preview, {
+    ...audit,
+    createdAt: timestamp
+  });
+
+  if (!previewAuditLogs.length) {
+    return { audit_logs: [], transaction: previous };
+  }
+
+  let updated: Transaction | null = null;
+
+  try {
+    updated = await patchTransaction(config, id, {
+      ...patch,
+      updated_at: timestamp
+    });
+    const auditLogs = buildTransactionAuditLogs(previous, updated, {
+      ...audit,
+      createdAt: timestamp
+    });
+
+    await upsertReceiptRow(config, updated);
+    await insertRequiredAuditLogs(config, auditLogs);
+
+    return { audit_logs: auditLogs, transaction: updated };
+  } catch (error) {
+    if (!updated) throw error;
+
+    try {
+      await patchTransaction(config, id, previous);
+      await upsertReceiptRow(config, previous);
+    } catch (rollbackError) {
+      throw new Error(failedWriteMessage("Transaction update", error, rollbackError));
+    }
+
+    throw new Error(failedWriteMessage("Transaction update", error));
+  }
+}
+
+export async function deleteSupabaseTransaction(
+  id: string,
+  audit: TransactionCreateAuditOptions = {}
+): Promise<TransactionWriteResult> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const previous = await loadSupabaseTransactionById(config, id);
+
+  if (!previous) {
+    throw new Error("Transaction was not found.");
+  }
+
+  await assertClosedPeriodReason(config, previous, {
+    date: previous.date,
+    money_in: previous.money_in,
+    money_out: previous.money_out
+  }, audit);
+
+  const auditLogs = [
+    createAuditEntry({
+      action: "delete",
+      actor: audit.actor ?? "admin",
+      created_at: new Date().toISOString(),
+      entity_id: previous.id,
+      entity_type: "transaction",
+      field_name: "",
+      new_value: "",
+      old_value: transactionSummary(previous),
+      reason: audit.reason || "",
+      source: audit.source ?? "manual"
+    })
+  ];
+
+  await insertRequiredAuditLogs(config, auditLogs);
+
+  const deletedRows = await deleteTransactionRow(config, id);
+
+  if (!deletedRows.length) {
+    throw new Error("Transaction delete failed after audit log was written.");
+  }
+
+  return { audit_logs: auditLogs };
+}
+
+export async function importSupabaseTransactions(
+  transactions: Transaction[],
+  audit: TransactionCreateAuditOptions = {}
+): Promise<TransactionWriteResult> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const normalized = transactions.map((transaction) => normalizeTransaction(transaction));
+  const timestamp = new Date().toISOString();
+  const auditLogs = normalized.map((transaction) =>
+    createAuditEntry({
+      action: "create",
+      actor: audit.actor ?? "system",
+      created_at: timestamp,
+      entity_id: transaction.id,
+      entity_type: "transaction",
+      field_name: "",
+      new_value: transactionSummary(transaction),
+      old_value: "",
+      reason: audit.reason || transaction.notes || "Imported transaction.",
+      source: audit.source ?? "csv_import"
+    })
+  );
+
+  let transactionsInserted = false;
+
+  try {
+    await insertRows(config, "transactions", normalized);
+    transactionsInserted = true;
+    await upsertRows(config, "receipts", toReceiptRows(normalized), "transaction_id");
+    await insertRequiredAuditLogs(config, auditLogs);
+  } catch (error) {
+    if (!transactionsInserted) throw error;
+
+    try {
+      await Promise.all(normalized.map((transaction) => deleteTransactionRow(config, transaction.id)));
+    } catch (rollbackError) {
+      throw new Error(failedWriteMessage("Transaction import", error, rollbackError));
+    }
+
+    throw new Error(failedWriteMessage("Transaction import", error));
+  }
+
+  return { audit_logs: auditLogs, transactions: normalized };
 }
 
 export async function loadSupabaseBackup(): Promise<LocalBackup> {
@@ -307,12 +675,13 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
     throw new Error("Supabase is not configured.");
   }
 
-  const [transactionRows, categoryRows, receiptRows, settingsRows, auditLogRows] = await Promise.all([
+  const [transactionRows, categoryRows, receiptRows, settingsRows, auditLogRows, monthlyClosingRows] = await Promise.all([
     supabaseRequest<Transaction[]>(config, "transactions?select=*&order=date.desc,created_at.desc"),
     supabaseRequest<Category[]>(config, "categories?select=*&order=name.asc"),
     supabaseRequest<ReceiptRow[]>(config, "receipts?select=*"),
     supabaseRequest<CompanySettingsRow[]>(config, "company_settings?select=*&id=eq.default&limit=1"),
-    supabaseRequest<AuditLogRow[]>(config, "audit_logs?select=*&order=created_at.desc")
+    supabaseRequest<AuditLogRow[]>(config, "audit_logs?select=*&order=created_at.desc"),
+    supabaseRequest<MonthlyClosingRow[]>(config, "monthly_closings?select=*&order=period_start.desc")
   ]);
 
   const receiptByTransaction = new Map(
@@ -336,6 +705,7 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
     categories: normalizeCategories(categoryRows.length ? categoryRows : seedCategories),
     receipts: receiptRows,
     audit_logs: normalizeAuditLogs(auditLogRows),
+    monthly_closings: normalizeMonthlyClosings(monthlyClosingRows),
     settings: fromSettingsRow(settingsRows[0])
   };
 }
@@ -355,6 +725,163 @@ export async function loadSupabaseAuditLogs(): Promise<AuditLog[]> {
   return normalizeAuditLogs(auditLogRows);
 }
 
+export async function loadSupabaseMonthlyClosings(): Promise<MonthlyClosing[]> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const rows = await supabaseRequest<MonthlyClosingRow[]>(
+    config,
+    "monthly_closings?select=*&order=period_start.desc"
+  );
+
+  return normalizeMonthlyClosings(rows);
+}
+
+export async function closeSupabaseMonthlyClosing(
+  year: number,
+  month: number,
+  reason: string,
+  readinessScore: number,
+  summary: MonthlyClosingSummaryJson
+) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) {
+    throw new Error("Close reason is required.");
+  }
+
+  const id = monthlyClosingId(year, month);
+  const existing = await loadMonthlyClosingById(config, id);
+  const now = new Date().toISOString();
+  const { periodEnd, periodStart } = monthPeriod(year, month);
+  const closing = normalizeMonthlyClosing({
+    ...(existing ?? {}),
+    id,
+    year,
+    month,
+    period_start: periodStart,
+    period_end: periodEnd,
+    status: "closed",
+    readiness_score: readinessScore,
+    closed_at: now,
+    closed_by: "admin",
+    close_reason: trimmedReason,
+    summary_json: summary,
+    created_at: existing?.created_at ?? now,
+    updated_at: now
+  });
+  const auditLog = createAuditEntry({
+    action: "update",
+    actor: "admin",
+    created_at: now,
+    entity_id: id,
+    entity_type: "reconciliation",
+    field_name: "monthly_closing",
+    old_value: existing?.status ?? "open",
+    new_value: JSON.stringify({
+      month,
+      readiness_score: readinessScore,
+      status: "closed",
+      year
+    }),
+    reason: trimmedReason,
+    source: "manual"
+  });
+  const saved = await upsertMonthlyClosing(config, closing);
+  await insertRequiredAuditLogs(config, [auditLog]);
+
+  return { audit_logs: [auditLog], closing: saved };
+}
+
+export async function reopenSupabaseMonthlyClosing(
+  year: number,
+  month: number,
+  reason: string
+) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const trimmedReason = reason.trim();
+
+  if (!trimmedReason) {
+    throw new Error("Reopen reason is required.");
+  }
+
+  const id = monthlyClosingId(year, month);
+  const existing = await loadMonthlyClosingById(config, id);
+  const now = new Date().toISOString();
+  const { periodEnd, periodStart } = monthPeriod(year, month);
+  const closing = normalizeMonthlyClosing({
+    ...(existing ?? {}),
+    id,
+    year,
+    month,
+    period_start: periodStart,
+    period_end: periodEnd,
+    status: "reopened",
+    reopened_at: now,
+    reopened_by: "admin",
+    reopen_reason: trimmedReason,
+    created_at: existing?.created_at ?? now,
+    updated_at: now
+  });
+  const auditLog = createAuditEntry({
+    action: "update",
+    actor: "admin",
+    created_at: now,
+    entity_id: id,
+    entity_type: "reconciliation",
+    field_name: "monthly_closing",
+    old_value: existing?.status ?? "closed",
+    new_value: "reopened",
+    reason: trimmedReason,
+    source: "manual"
+  });
+  const saved = await upsertMonthlyClosing(config, closing);
+  await insertRequiredAuditLogs(config, [auditLog]);
+
+  return { audit_logs: [auditLog], closing: saved };
+}
+
+export async function updateSupabaseMonthlyClosingSummary(
+  year: number,
+  month: number,
+  summary: MonthlyClosingSummaryJson
+) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const id = monthlyClosingId(year, month);
+  const existing = await loadMonthlyClosingById(config, id);
+
+  if (!existing) {
+    throw new Error("Monthly closing record was not found.");
+  }
+
+  const saved = await upsertMonthlyClosing(config, {
+    ...existing,
+    summary_json: summary,
+    updated_at: new Date().toISOString()
+  });
+
+  return { audit_logs: [], closing: saved };
+}
+
 export async function appendSupabaseAuditLogs(entries: AuditLog[]) {
   const config = getSupabaseConfig();
 
@@ -364,35 +891,21 @@ export async function appendSupabaseAuditLogs(entries: AuditLog[]) {
 
   const normalizedEntries = normalizeAuditLogs(entries);
 
-  await upsertRows(config, "audit_logs", normalizedEntries, "id");
+  await insertIgnoreRows(config, "audit_logs", normalizedEntries, "id");
 
   return loadSupabaseAuditLogs();
 }
 
-export async function replaceSupabaseBackup(backup: LocalBackup): Promise<LocalBackup> {
+export async function replaceSupabaseBackup(_backup: LocalBackup): Promise<LocalBackup> {
+  void _backup;
+
   const config = getSupabaseConfig();
 
   if (!config) {
     throw new Error("Supabase is not configured.");
   }
 
-  const normalized = normalizeBackup(backup);
-  const transactions = normalized.transactions.map((transaction) =>
-    normalizeTransaction({
-      ...transaction,
-      updated_at: new Date().toISOString()
-    })
+  throw new Error(
+    "Full Supabase backup replacement is disabled. Use protected ledger APIs for transaction writes."
   );
-
-  await deleteAllRows(config, "receipts", "transaction_id");
-  await deleteAllRows(config, "transactions", "id");
-  await deleteAllRows(config, "categories", "id");
-
-  await upsertRows(config, "categories", normalized.categories, "id");
-  await upsertRows(config, "transactions", transactions, "id");
-  await upsertRows(config, "receipts", toReceiptRows(transactions), "transaction_id");
-  await upsertRows(config, "audit_logs", normalized.audit_logs, "id");
-  await upsertSettings(config, normalized.settings);
-
-  return loadSupabaseBackup();
 }
