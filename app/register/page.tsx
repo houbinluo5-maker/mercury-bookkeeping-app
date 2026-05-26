@@ -17,8 +17,10 @@ export default async function RegisterPage({ searchParams }: PageProps) {
   return (
     <RegisterPanel
       error={getParam(params, "error")}
+      githubEnabled={isAuthProviderEnabled("github")}
       googleEnabled={isAuthProviderEnabled("google")}
       message={getParam(params, "message")}
+      microsoftEnabled={isAuthProviderEnabled("azure")}
       nextPath={isSafeRedirectPath(nextParam) ? nextParam : "/"}
     />
   );
