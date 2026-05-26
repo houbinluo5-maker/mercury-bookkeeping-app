@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   isAdminPasswordConfigured,
   isAuthProviderEnabled,
@@ -5,6 +6,10 @@ import {
   isSupabaseAuthConfigured
 } from "@/lib/auth";
 import { LoginPanel } from "@/components/login-panel";
+
+export const metadata: Metadata = {
+  title: "Sign in"
+};
 
 type LoginPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;

@@ -22,6 +22,8 @@ import {
   WalletCards
 } from "lucide-react";
 import { clsx } from "clsx";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { useBookkeeping } from "@/lib/storage";
 import { useI18n } from "@/lib/i18n";
 
@@ -105,16 +107,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-paper">
       <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-slate-200 bg-[#fbfaf7] xl:flex">
         <div className="border-b border-slate-200 px-5 py-5">
-          <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink text-white shadow-sm">
-            <WalletCards aria-hidden="true" className="h-5 w-5" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">Mercury Bookkeeping</p>
-            <p className="truncate text-xs font-medium text-slate-500">{t("executiveFinanceOs")}</p>
-          </div>
-          </div>
-          <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm">
+          <BrandLogo size="md" subtitle={t("brandSubtitle")} />
+          <div className="mt-4 rounded-lg border border-marine/10 bg-white/95 px-3 py-3 shadow-sm">
             <p className="truncate text-sm font-semibold text-ink">{account?.workspace.name ?? settings.company_name}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span>{account?.workspace.tax_year ?? settings.tax_year}</span>
@@ -125,6 +119,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
               <span>{t("cpaReadyWorkspace")}</span>
             </div>
+            <p className="mt-2 text-xs leading-5 text-slate-500">{t("brandWorkspaceSummary")}</p>
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col justify-between">
@@ -178,6 +173,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="xl:pl-72">
         <header className="sticky top-0 z-20 border-b border-line bg-white/95 shadow-sm backdrop-blur xl:hidden">
           <div className="flex h-16 items-center gap-3 overflow-x-auto px-4">
+            <Link
+              aria-label="Mercury Books"
+              className="flex h-10 min-w-10 items-center justify-center rounded-md border border-line bg-white px-2 text-ink shadow-sm"
+              href="/"
+              title="Mercury Books"
+            >
+              <BrandMark size="sm" />
+            </Link>
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, item.href);

@@ -1,4 +1,9 @@
+import type { Metadata } from "next";
 import { ForgotPasswordPanel } from "@/components/auth-panels";
+
+export const metadata: Metadata = {
+  title: "Forgot password"
+};
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
