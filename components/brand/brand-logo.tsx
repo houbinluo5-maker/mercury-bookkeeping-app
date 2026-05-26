@@ -41,14 +41,14 @@ export function BrandLogo({
   }
 
   return (
-    <div className={clsx("flex min-w-0 items-center gap-3", className)}>
+    <div aria-label="Mercury Books" className={clsx("flex min-w-0 items-center gap-3", className)}>
       <BrandMark size={sizes.mark} />
       <div className="min-w-0">
-        <p className={clsx("truncate font-semibold tracking-normal text-ink", sizes.name)}>
+        <p className={clsx("truncate font-bold tracking-normal text-[#0B1220]", sizes.name)}>
           Mercury Books
         </p>
         {showSubtitle ? (
-          <p className={clsx("truncate font-semibold text-mint", sizes.subtitle)}>
+          <p className={clsx("truncate font-semibold text-slate-500", sizes.subtitle)}>
             {subtitle}
           </p>
         ) : null}
