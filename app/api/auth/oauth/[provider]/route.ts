@@ -34,5 +34,10 @@ export async function GET(
   authorizeUrl.searchParams.set("provider", providerMap[mappedProvider]);
   authorizeUrl.searchParams.set("redirect_to", new URL("/auth/callback", request.url).toString());
 
+  if (mappedProvider === "azure") {
+    // Supabase Azure Auth requires email scope so the external provider returns a usable email.
+    authorizeUrl.searchParams.set("scopes", "email");
+  }
+
   return NextResponse.redirect(authorizeUrl);
 }
