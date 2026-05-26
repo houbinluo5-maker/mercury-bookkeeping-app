@@ -11,6 +11,7 @@ import {
   MicrosoftIcon,
   OAuthButton,
   authInputClass,
+  oauthProviderHref,
   primaryAuthButtonClass,
   secondaryAuthButtonClass
 } from "@/components/auth-panels";
@@ -123,17 +124,17 @@ export function LoginPanel({
         <div className="mt-6 space-y-3">
           <AuthDivider label={t("orContinueWith")} />
           {googleEnabled ? (
-            <OAuthButton href="/api/auth/oauth/google" icon={<GoogleGIcon />}>
+            <OAuthButton href={oauthProviderHref("google", nextPath)} icon={<GoogleGIcon />}>
               {t("continueWithGoogle")}
             </OAuthButton>
           ) : null}
           {microsoftEnabled ? (
-            <OAuthButton href="/api/auth/oauth/azure" icon={<MicrosoftIcon />}>
+            <OAuthButton href={oauthProviderHref("azure", nextPath)} icon={<MicrosoftIcon />}>
               {t("continueWithMicrosoft")}
             </OAuthButton>
           ) : null}
           {githubEnabled ? (
-            <OAuthButton href="/api/auth/oauth/github" icon={<Github aria-hidden="true" className="h-4 w-4" />}>
+            <OAuthButton href={oauthProviderHref("github", nextPath)} icon={<Github aria-hidden="true" className="h-4 w-4" />}>
               {t("continueWithGithub")}
             </OAuthButton>
           ) : null}

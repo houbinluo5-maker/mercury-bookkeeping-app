@@ -257,6 +257,8 @@ const translations: Record<Language, Record<string, string>> = {
     newPassword: "New password",
     normalizedEmail: "Normalized email",
     orContinueWith: "or continue with",
+    oauthCallbackMissingSession:
+      "We could not find a sign-in token or authorization code. Please start sign-in again.",
     oauthSignInFailed: "OAuth sign-in failed.",
     passwordUpdated: "Password updated. You can sign in now.",
     privateBookkeepingWorkspace: "Private finance operations workspace for ecommerce operators.",
@@ -1377,6 +1379,7 @@ const authZhOverrides: Record<string, string> = {
   newPassword: "新密码",
   normalizedEmail: "标准化邮箱",
   orContinueWith: "或继续使用",
+  oauthCallbackMissingSession: "未找到登录令牌或授权码。请重新开始登录。",
   oauthSignInFailed: "OAuth 登录失败。",
   password: "密码",
   passwordUpdated: "密码已更新。现在可以登录。",

@@ -63,6 +63,10 @@ export function OAuthButton({
   );
 }
 
+export function oauthProviderHref(provider: "google" | "github" | "azure", nextPath: string) {
+  return `/api/auth/oauth/${provider}?next=${encodeURIComponent(nextPath || "/")}`;
+}
+
 export function AuthDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3">
@@ -236,17 +240,17 @@ export function RegisterPanel({
         <div className="mt-6 space-y-3">
           <AuthDivider label={t("orContinueWith")} />
           {googleEnabled ? (
-            <OAuthButton href="/api/auth/oauth/google" icon={<GoogleGIcon />}>
+            <OAuthButton href={oauthProviderHref("google", nextPath)} icon={<GoogleGIcon />}>
               {t("continueWithGoogle")}
             </OAuthButton>
           ) : null}
           {microsoftEnabled ? (
-            <OAuthButton href="/api/auth/oauth/azure" icon={<MicrosoftIcon />}>
+            <OAuthButton href={oauthProviderHref("azure", nextPath)} icon={<MicrosoftIcon />}>
               {t("continueWithMicrosoft")}
             </OAuthButton>
           ) : null}
           {githubEnabled ? (
-            <OAuthButton href="/api/auth/oauth/github" icon={<Github aria-hidden="true" className="h-4 w-4" />}>
+            <OAuthButton href={oauthProviderHref("github", nextPath)} icon={<Github aria-hidden="true" className="h-4 w-4" />}>
               {t("continueWithGithub")}
             </OAuthButton>
           ) : null}
@@ -351,23 +355,32 @@ export function AuthCallbackPanel() {
     if (typeof window === "undefined") {
       return {
         errorMessage: "",
+        code: "",
+        nextPath: "/",
         tokenPayload: null
       };
     }
 
     const query = new URLSearchParams(window.location.search);
+    const requestedNext = query.get("next") ?? "/";
+    const nextPath = requestedNext.startsWith("/") && !requestedNext.startsWith("//") && !requestedNext.startsWith("/login")
+      ? requestedNext
+      : "/";
     const errorMessage =
       query.get("error_description") || query.get("error") || query.get("message") || "";
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = params.get("access_token") ?? "";
 
     return {
+      code: query.get("code") ?? "",
       errorMessage,
-      tokenPayload: {
-        access_token: params.get("access_token") ?? "",
+      nextPath,
+      tokenPayload: accessToken ? {
+        access_token: accessToken,
         expires_in: Number(params.get("expires_in") ?? 3600),
         refresh_token: params.get("refresh_token") ?? "",
         token_type: params.get("token_type") ?? "bearer"
-      }
+      } : null
     };
   }, []);
   const [status, setStatus] = useState<{ message: string; tone: "error" | "loading" }>(() => {
@@ -375,13 +388,25 @@ export function AuthCallbackPanel() {
       return { message: callbackState.errorMessage, tone: "error" };
     }
 
-    return callbackState.tokenPayload?.access_token
+    return callbackState.code || callbackState.tokenPayload?.access_token
       ? { message: t("securingSession"), tone: "loading" }
-      : { message: t("missingSessionToken"), tone: "error" };
+      : { message: t("oauthCallbackMissingSession"), tone: "error" };
   });
 
   useEffect(() => {
-    if (callbackState.errorMessage || !callbackState.tokenPayload?.access_token) {
+    if (callbackState.errorMessage) {
+      return;
+    }
+
+    if (callbackState.code) {
+      const url = new URL("/api/auth/callback", window.location.origin);
+      url.searchParams.set("code", callbackState.code);
+      url.searchParams.set("next", callbackState.nextPath);
+      window.location.replace(url.toString());
+      return;
+    }
+
+    if (!callbackState.tokenPayload?.access_token) {
       return;
     }
 
@@ -392,7 +417,7 @@ export function AuthCallbackPanel() {
     })
       .then(async (response) => {
         if (!response.ok) throw new Error((await response.json()).error);
-        window.location.href = "/";
+        window.location.href = callbackState.nextPath;
       })
       .catch((error: unknown) => {
         setStatus({
@@ -421,7 +446,7 @@ export function AuthCallbackPanel() {
         </h2>
         <p className="mt-3 text-sm leading-6 text-slate-600">{status.message}</p>
         {status.tone === "error" ? (
-          <Link className={`${primaryAuthButtonClass} mt-6`} href="/login">
+          <Link className={`${primaryAuthButtonClass} mt-6`} href={`/login?next=${encodeURIComponent(callbackState.nextPath)}`}>
             {t("backToLogin")}
           </Link>
         ) : null}
