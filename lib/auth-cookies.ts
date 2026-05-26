@@ -38,6 +38,10 @@ export function setSupabaseSessionCookies(
     });
   }
 
+  setActiveWorkspaceCookie(response, workspace);
+}
+
+export function setActiveWorkspaceCookie(response: NextResponse, workspace: Pick<Workspace, "id">) {
   response.cookies.set({
     name: ACTIVE_WORKSPACE_COOKIE,
     value: workspace.id,

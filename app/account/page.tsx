@@ -1,12 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CheckCircle2, KeyRound, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import { Badge } from "@/components/badge";
+import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
-import { SectionHeader } from "@/components/ui-primitives";
+import { AlertBanner, SectionHeader } from "@/components/ui-primitives";
 import { useI18n } from "@/lib/i18n";
 
 type AccountState = {
+  authProvider: string;
   authType: "supabase" | "legacy";
+  legacyWorkspaceClaim: {
+    canClaim: boolean;
+    claimedByCurrentUser: boolean;
+    claimedByOtherUser: boolean;
+    hasData: boolean;
+    workspace: {
+      id: string;
+      name: string;
+    } | null;
+  } | null;
+  normalizedEmail: string;
+  ownsWorkspace: boolean;
   role: string;
   user: {
     avatarUrl: string;
@@ -25,45 +41,156 @@ type AccountState = {
 
 export default function AccountPage() {
   const [account, setAccount] = useState<AccountState | null>(null);
+  const [claimError, setClaimError] = useState("");
+  const [claimSuccess, setClaimSuccess] = useState("");
+  const [claiming, setClaiming] = useState(false);
   const { t } = useI18n();
 
+  async function fetchAccountState() {
+    const response = await fetch("/api/auth/me");
+    if (!response.ok) return null;
+
+    return (await response.json()) as AccountState;
+  }
+
+  async function loadAccount() {
+    const nextAccount = await fetchAccountState();
+
+    if (nextAccount) setAccount(nextAccount);
+  }
+
   useEffect(() => {
-    fetch("/api/auth/me").then(async (response) => {
-      if (response.ok) setAccount((await response.json()) as AccountState);
+    let active = true;
+
+    fetchAccountState().then((nextAccount) => {
+      if (active && nextAccount) setAccount(nextAccount);
     });
+
+    return () => {
+      active = false;
+    };
   }, []);
+
+  async function claimLegacyWorkspace() {
+    setClaiming(true);
+    setClaimError("");
+    setClaimSuccess("");
+
+    try {
+      const response = await fetch("/api/auth/claim-legacy-workspace", {
+        method: "POST"
+      });
+      const body = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(body.error || t("legacyWorkspaceClaimError"));
+      }
+
+      setClaimSuccess(t("legacyWorkspaceClaimed"));
+      await loadAccount();
+    } catch (error) {
+      setClaimError(error instanceof Error ? error.message : t("legacyWorkspaceClaimError"));
+    } finally {
+      setClaiming(false);
+    }
+  }
+
+  const claim = account?.legacyWorkspaceClaim;
+  const showClaimCard = account?.authType === "supabase" && claim?.hasData && !claim.claimedByCurrentUser;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        description="Review authenticated user, workspace, and role context for this bookkeeping environment."
+        description={t("accountPageDescription")}
         eyebrow={t("systemNav")}
         title={t("accountSettings")}
       />
-      <section className="rounded-lg border border-line bg-white p-5 shadow-soft">
+
+      {claimSuccess ? (
+        <AlertBanner icon={<CheckCircle2 className="h-5 w-5" />} tone="success">
+          <p className="text-sm font-semibold">{claimSuccess}</p>
+        </AlertBanner>
+      ) : null}
+
+      {claimError ? (
+        <AlertBanner tone="danger">
+          <p className="text-sm font-semibold">{claimError}</p>
+        </AlertBanner>
+      ) : null}
+
+      <section className="surface-card p-5">
         <SectionHeader
-          description={account?.authType === "legacy" ? "Legacy fallback" : "Supabase Auth"}
-          title={account?.workspace.name ?? "Workspace"}
+          description={account?.authType === "legacy" ? t("legacyAdminFallback") : "Supabase Auth"}
+          title={t("workspaceIdentity")}
         />
-        <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div>
-            <dt className="form-label">Email</dt>
+        <dl className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("signedInEmail")}</dt>
             <dd className="mt-1 text-sm font-semibold text-ink">{account?.user?.email ?? "Legacy admin"}</dd>
           </div>
-          <div>
-            <dt className="form-label">Role</dt>
-            <dd className="mt-1 text-sm font-semibold capitalize text-ink">{account?.role ?? "owner"}</dd>
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("authProvider")}</dt>
+            <dd className="mt-1 text-sm font-semibold capitalize text-ink">{account?.authProvider ?? "legacy"}</dd>
           </div>
-          <div>
-            <dt className="form-label">Workspace ID</dt>
-            <dd className="mt-1 text-sm font-semibold text-ink">{account?.workspace.id ?? ""}</dd>
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("activeWorkspace")}</dt>
+            <dd className="mt-1 text-sm font-semibold text-ink">{account?.workspace.name ?? "Workspace"}</dd>
+            <p className="mt-1 break-all text-xs text-slate-500">{account?.workspace.id ?? ""}</p>
           </div>
-          <div>
-            <dt className="form-label">Business type</dt>
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("workspaceOwnership")}</dt>
+            <dd className="mt-2 flex flex-wrap items-center gap-2">
+              <Badge tone={account?.ownsWorkspace ? "green" : "blue"}>
+                {account?.ownsWorkspace ? t("workspaceOwnerStatus") : t("workspaceMemberStatus")}
+              </Badge>
+              <span className="text-sm font-semibold capitalize text-ink">{account?.role ?? "owner"}</span>
+            </dd>
+          </div>
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("businessType")}</dt>
             <dd className="mt-1 text-sm font-semibold text-ink">{account?.workspace.business_type ?? "US LLC"}</dd>
+          </div>
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
+            <dt className="form-label">{t("normalizedEmail")}</dt>
+            <dd className="mt-1 text-sm font-semibold text-ink">{account?.normalizedEmail || "n/a"}</dd>
           </div>
         </dl>
       </section>
+
+      {showClaimCard ? (
+        <section className="surface-card overflow-hidden border-marine/20">
+          <div className="border-b border-line bg-marine/[0.03] p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-marine text-white">
+                  <KeyRound aria-hidden="true" className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="section-title">{t("legacyWorkspaceFound")}</h2>
+                  <p className="section-subtitle max-w-2xl">{t("legacyWorkspaceFoundDescription")}</p>
+                </div>
+              </div>
+              <Badge tone={claim?.claimedByOtherUser ? "amber" : "blue"}>
+                {claim?.claimedByOtherUser ? t("legacyWorkspaceAlreadyClaimed") : t("workspaceOwnership")}
+              </Badge>
+            </div>
+          </div>
+          <div className="grid gap-4 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+            <div className="flex gap-3 text-sm leading-6 text-slate-600">
+              <ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-mint" />
+              <p>{t("legacyWorkspaceClaimSafety")}</p>
+            </div>
+            <Button
+              disabled={claiming || claim?.claimedByOtherUser || !claim?.canClaim}
+              onClick={claimLegacyWorkspace}
+              variant="primary"
+            >
+              {claiming ? <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" /> : <UserRound aria-hidden="true" className="h-4 w-4" />}
+              {claiming ? t("claimingWorkspace") : t("claimThisWorkspace")}
+            </Button>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

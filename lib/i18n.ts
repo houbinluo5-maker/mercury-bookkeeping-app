@@ -7,7 +7,10 @@ import type { CategoryType, Language } from "@/lib/types";
 const translations: Record<Language, Record<string, string>> = {
   en: {
     account: "Account",
+    accountPageDescription:
+      "Review authenticated user, workspace ownership, and safe legacy data claim options.",
     action: "Action",
+    activeWorkspace: "Active workspace",
     add: "Add",
     addTransaction: "Add Transaction",
     adminPassword: "Admin Password",
@@ -201,6 +204,7 @@ const translations: Record<Language, Record<string, string>> = {
     authHeroSubtitle:
       "Revenue, receipts, reconciliation, monthly close, and CPA handoff in one secure workspace.",
     authHeroTitle: "Finance operations access for serious ecommerce books.",
+    authProvider: "Auth provider",
     authBenefitClose: "Month close readiness, locked periods, and review cues stay visible.",
     authBenefitCloseLabel: "Close control",
     authBenefitControl: "Private workspace access with user-level session checks.",
@@ -241,8 +245,17 @@ const translations: Record<Language, Record<string, string>> = {
     legacyAdminFallback: "Legacy admin fallback",
     legacyAdminFallbackHelp:
       "Temporary admin-only access for private deployments while account login is being rolled out.",
+    legacyWorkspaceAlreadyClaimed: "Already claimed",
+    legacyWorkspaceClaimed: "Legacy workspace claimed. Your active workspace now points to the existing books.",
+    legacyWorkspaceClaimError: "We could not claim the legacy workspace.",
+    legacyWorkspaceClaimSafety:
+      "Claiming links this authenticated account as owner. Existing transactions, receipts, reconciliation data, monthly closings, settings, and audit logs are preserved in place.",
+    legacyWorkspaceFound: "Legacy workspace found",
+    legacyWorkspaceFoundDescription:
+      "This workspace contains existing transactions, receipts, reports, settings, and monthly closing data.",
     missingSessionToken: "No Supabase session token was returned. Please start sign-in again.",
     newPassword: "New password",
+    normalizedEmail: "Normalized email",
     orContinueWith: "or continue with",
     oauthSignInFailed: "OAuth sign-in failed.",
     passwordUpdated: "Password updated. You can sign in now.",
@@ -255,9 +268,16 @@ const translations: Record<Language, Record<string, string>> = {
     securingSession: "Securing your session...",
     sendResetLink: "Send reset link",
     secureWorkspaceAccess: "Secure workspace access",
+    signedInEmail: "Signed-in email",
     signInNeedsAttention: "Sign-in needs attention",
     updatePassword: "Update password",
     workspaceName: "Company / workspace name",
+    workspaceIdentity: "Workspace identity",
+    workspaceMemberStatus: "Workspace member",
+    workspaceOwnerStatus: "Workspace owner",
+    workspaceOwnership: "Workspace ownership",
+    claimThisWorkspace: "Claim this workspace",
+    claimingWorkspace: "Claiming...",
     quickActions: "Quick actions",
     quickActionsHelp: "Move directly into the most common finance operations tasks.",
     quarterlyReport: "Quarterly Report",
@@ -534,11 +554,13 @@ const translations: Record<Language, Record<string, string>> = {
     "auditEntity.settings": "Settings",
     "auditEntity.category": "Category",
     "auditEntity.reconciliation": "Reconciliation",
+    "auditEntity.workspace": "Workspace",
     "auditSource.manual": "Manual",
     "auditSource.import": "Import",
     "auditSource.system": "System",
     "auditSource.csv_import": "CSV import",
     "auditSource.receipt_upload": "Receipt upload",
+    "auditSource.oauth_signup": "OAuth signup",
     "auditAction.create": "Create",
     "auditAction.update": "Update",
     "auditAction.delete": "Delete",
@@ -553,11 +575,14 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.tax_line_change": "Tax line change",
     "auditAction.resolve_review": "Resolve review",
     "auditAction.dismiss_duplicate": "Dismiss duplicate",
-    "auditAction.note_change": "Note change"
+    "auditAction.note_change": "Note change",
+    "auditAction.workspace_claimed": "Workspace claimed"
   },
   zh: {
     account: "账户",
+    accountPageDescription: "查看登录用户、工作区所有权和安全的旧数据认领选项。",
     action: "操作",
+    activeWorkspace: "当前工作区",
     add: "新增",
     addTransaction: "新增交易",
     adminPassword: "管理员密码",
@@ -1005,11 +1030,13 @@ const translations: Record<Language, Record<string, string>> = {
     "auditEntity.settings": "设置",
     "auditEntity.category": "分类",
     "auditEntity.reconciliation": "对账",
+    "auditEntity.workspace": "工作区",
     "auditSource.manual": "手动",
     "auditSource.import": "导入",
     "auditSource.system": "系统",
     "auditSource.csv_import": "CSV 导入",
     "auditSource.receipt_upload": "收据上传",
+    "auditSource.oauth_signup": "OAuth 注册",
     "auditAction.create": "创建",
     "auditAction.update": "更新",
     "auditAction.delete": "删除",
@@ -1024,7 +1051,8 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.tax_line_change": "税务行项目变更",
     "auditAction.resolve_review": "完成复核",
     "auditAction.dismiss_duplicate": "忽略重复提醒",
-    "auditAction.note_change": "备注变更"
+    "auditAction.note_change": "备注变更",
+    "auditAction.workspace_claimed": "工作区已认领"
   }
 };
 
@@ -1182,7 +1210,9 @@ const ruleReasonLabels: Record<Language, Record<string, string>> = {
 
 const authZhOverrides: Record<string, string> = {
   accountRecovery: "账户恢复",
+  accountPageDescription: "查看登录用户、工作区所有权和安全的旧数据认领选项。",
   accountSettings: "账户",
+  activeWorkspace: "当前工作区",
   alreadyHaveAccount: "已有账号？",
   authBenefitClose: "月结准备、锁账期间与复核提示清晰可见。",
   authBenefitCloseLabel: "月结控制",
@@ -1196,6 +1226,7 @@ const authZhOverrides: Record<string, string> = {
   authInviteOnly: "当前注册仅限邀请。",
   authLoginSubtitlePremium: "访问工作区账本、收据、月结流程与 CPA 资料包。",
   authProviderDisabled: "该登录方式尚未为此工作区启用。",
+  authProvider: "登录方式",
   authRequestFailedFriendly: "登录请求未能完成。请检查信息后重试。",
   authSignInEyebrow: "工作区登录",
   authSupabaseConfigMissing: "此部署尚未配置 Supabase Auth。",
@@ -1216,8 +1247,16 @@ const authZhOverrides: Record<string, string> = {
   fullName: "姓名",
   legacyAdminFallback: "传统管理员备用入口",
   legacyAdminFallbackHelp: "仅供私有部署在账号登录过渡期临时使用。",
+  legacyWorkspaceAlreadyClaimed: "已被认领",
+  legacyWorkspaceClaimed: "旧工作区已认领。当前工作区已指向既有账本。",
+  legacyWorkspaceClaimError: "无法认领旧工作区。",
+  legacyWorkspaceClaimSafety:
+    "认领会将此登录账号设为所有者。既有交易、收据、对账数据、月结、设置和审计日志都会原地保留。",
+  legacyWorkspaceFound: "发现旧工作区",
+  legacyWorkspaceFoundDescription: "此工作区包含既有交易、收据、报表、设置和月结数据。",
   missingSessionToken: "未收到 Supabase 会话令牌。请重新开始登录。",
   newPassword: "新密码",
+  normalizedEmail: "标准化邮箱",
   orContinueWith: "或继续使用",
   oauthSignInFailed: "OAuth 登录失败。",
   password: "密码",
@@ -1230,9 +1269,16 @@ const authZhOverrides: Record<string, string> = {
   securingSession: "正在保护你的会话...",
   secureWorkspaceAccess: "安全工作区访问",
   sendResetLink: "发送重置链接",
+  signedInEmail: "登录邮箱",
   signInNeedsAttention: "登录需要处理",
   updatePassword: "更新密码",
-  workspaceName: "公司 / 工作区名称"
+  workspaceName: "公司 / 工作区名称",
+  workspaceIdentity: "工作区身份",
+  workspaceMemberStatus: "工作区成员",
+  workspaceOwnerStatus: "工作区所有者",
+  workspaceOwnership: "工作区所有权",
+  claimThisWorkspace: "认领此工作区",
+  claimingWorkspace: "正在认领..."
 };
 
 export function translate(language: Language, key: string) {

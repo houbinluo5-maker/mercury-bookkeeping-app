@@ -14,7 +14,8 @@ export const auditEntityTypes: AuditEntityType[] = [
   "receipt",
   "settings",
   "category",
-  "reconciliation"
+  "reconciliation",
+  "workspace"
 ];
 
 export const auditActions: AuditAction[] = [
@@ -32,7 +33,8 @@ export const auditActions: AuditAction[] = [
   "tax_line_change",
   "resolve_review",
   "dismiss_duplicate",
-  "note_change"
+  "note_change",
+  "workspace_claimed"
 ];
 
 export const auditSources: AuditSource[] = [
@@ -40,7 +42,8 @@ export const auditSources: AuditSource[] = [
   "import",
   "system",
   "csv_import",
-  "receipt_upload"
+  "receipt_upload",
+  "oauth_signup"
 ];
 
 const trackedTransactionFields = [
