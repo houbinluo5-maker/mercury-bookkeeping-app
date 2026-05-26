@@ -4,8 +4,17 @@ import { AppShell } from "@/components/app-shell";
 import { BookkeepingProvider } from "@/lib/storage";
 
 export const metadata: Metadata = {
-  title: "Mercury Bookkeeping MVP",
-  description: "Manual-entry bookkeeping for a US LLC ecommerce business"
+  applicationName: "Mercury Books",
+  description:
+    "Executive Finance OS for ecommerce bookkeeping, receipts, reconciliation, monthly close, and CPA handoff.",
+  icons: {
+    apple: [{ sizes: "180x180", type: "image/png", url: "/apple-icon" }],
+    icon: [{ sizes: "32x32", type: "image/png", url: "/icon" }]
+  },
+  title: {
+    default: "Mercury Books | Executive Finance OS",
+    template: "%s | Mercury Books"
+  }
 };
 
 export default function RootLayout({

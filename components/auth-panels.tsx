@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Github, Loader2, Mail, ShieldCheck, WalletCards } from "lucide-react";
+import { ArrowRight, CheckCircle2, Github, Loader2, Mail, ShieldCheck } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import { useI18n } from "@/lib/i18n";
 
 export const authInputClass =
@@ -13,14 +14,6 @@ export const primaryAuthButtonClass =
 
 export const secondaryAuthButtonClass =
   "inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-marine/10";
-
-function BrandMark() {
-  return (
-    <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink text-white shadow-panel">
-      <WalletCards aria-hidden="true" className="h-5 w-5" />
-    </div>
-  );
-}
 
 function BenefitCard({ label, value }: { label: string; value: string }) {
   return (
@@ -127,17 +120,16 @@ export function AuthLayout({
         <aside className="hidden lg:block">
           <div className="max-w-xl">
             <div className="flex items-center gap-3">
-              <BrandMark />
-              <div>
-                <p className="text-sm font-semibold text-ink">Mercury Books</p>
-                <p className="text-xs font-semibold text-mint">{t("executiveFinanceOs")}</p>
-              </div>
+              <BrandLogo size="lg" subtitle={t("brandSubtitle")} />
             </div>
             <p className="mt-12 text-xs font-semibold uppercase text-mint">{eyebrow}</p>
             <h1 className="mt-3 max-w-2xl text-5xl font-semibold leading-tight tracking-normal text-ink">
               {title}
             </h1>
             <p className="mt-5 max-w-lg text-base leading-7 text-slate-600">{description}</p>
+            <p className="mt-3 max-w-lg text-sm font-medium leading-6 text-slate-500">
+              {t("brandWorkspaceSummary")}
+            </p>
             <div className="mt-8 grid max-w-xl gap-3 sm:grid-cols-3">
               {benefits.map(([label, value]) => (
                 <BenefitCard key={label} label={label} value={value} />
@@ -152,11 +144,7 @@ export function AuthLayout({
 
         <section className="mx-auto w-full max-w-[29rem]">
           <div className="mb-5 flex items-center gap-3 lg:hidden">
-            <BrandMark />
-            <div>
-              <p className="text-sm font-semibold text-ink">Mercury Books</p>
-              <p className="text-xs text-slate-500">{t("privateBookkeepingWorkspace")}</p>
-            </div>
+            <BrandLogo size="md" subtitle={t("brandSubtitle")} />
           </div>
           <div className="rounded-lg border border-white/70 bg-white/95 p-5 shadow-command ring-1 ring-slate-900/5 backdrop-blur sm:p-7">
             {children}
