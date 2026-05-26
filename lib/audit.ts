@@ -34,7 +34,12 @@ export const auditActions: AuditAction[] = [
   "resolve_review",
   "dismiss_duplicate",
   "note_change",
-  "workspace_claimed"
+  "workspace_claimed",
+  "member_invited",
+  "invitation_accepted",
+  "invitation_revoked",
+  "member_removed",
+  "member_role_changed"
 ];
 
 export const auditSources: AuditSource[] = [

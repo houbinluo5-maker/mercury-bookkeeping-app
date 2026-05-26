@@ -40,6 +40,7 @@ export const config = {
     "/receipts/:path*",
     "/reports/:path*",
     "/settings/:path*",
+    "/team/:path*",
     "/transactions/:path*"
   ]
 };

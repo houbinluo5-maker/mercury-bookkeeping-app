@@ -195,7 +195,7 @@ export async function getUserFromAccessToken(accessToken: string) {
 
 export async function hasOwnerWorkspace() {
   const rows = await adminRestRequest<WorkspaceMember[]>(
-    "workspace_members?select=*&role=eq.owner&limit=1"
+    "workspace_members?select=*&role=eq.owner&status=eq.active&limit=1"
   );
 
   return rows.length > 0;
@@ -266,6 +266,8 @@ async function resolveMembershipWorkspace(
   });
 
   for (const membership of orderedMemberships) {
+    if (membership.status && membership.status !== "active") continue;
+
     const workspace = await loadWorkspaceById(membership.workspace_id);
     if (workspace) return { membership, workspace };
   }
@@ -279,12 +281,18 @@ async function createLinkedMembership(
   role: WorkspaceMember["role"]
 ) {
   const now = new Date().toISOString();
+  const normalizedEmail = normalizeIdentityEmail(user.email);
   const membership: WorkspaceMember = {
+    accepted_at: now,
     id: `wm-${randomUUID()}`,
+    email: normalizedEmail,
+    normalized_email: normalizedEmail,
+    status: "active",
     workspace_id: workspace.id,
     user_id: user.id,
     role,
-    created_at: now
+    created_at: now,
+    updated_at: now
   };
 
   await adminRestRequest("workspace_members?on_conflict=workspace_id,user_id", {
@@ -379,11 +387,16 @@ export async function ensureProfileAndWorkspace(
     updated_at: now
   };
   const membership: WorkspaceMember = {
+    accepted_at: now,
+    email: profile.email,
     id: `wm-${randomUUID()}`,
+    normalized_email: profile.email,
+    status: "active",
     workspace_id: workspace.id,
     user_id: user.id,
     role: "owner",
-    created_at: now
+    created_at: now,
+    updated_at: now
   };
 
   await adminRestRequest("workspaces?on_conflict=id", {
@@ -436,13 +449,13 @@ export async function getLegacyWorkspaceClaimStatus(
   };
   const hasData = Object.values(dataSummary).some(Boolean);
   const members = workspace ? await loadLegacyWorkspaceMembers() : [];
-  const ownerMember = members.find((member) => member.role === "owner");
+  const ownerMember = members.find((member) => member.role === "owner" && (member.status ?? "active") === "active");
   const currentUserId = user?.id ?? "";
   const claimedByCurrentUser = Boolean(
     currentUserId &&
       (workspace?.owner_user_id === currentUserId ||
         ownerMember?.user_id === currentUserId ||
-        members.some((member) => member.user_id === currentUserId && member.role === "owner"))
+        members.some((member) => member.user_id === currentUserId && member.role === "owner" && (member.status ?? "active") === "active"))
   );
   const claimedByOtherUser = Boolean(
     (workspace?.owner_user_id && workspace.owner_user_id !== currentUserId) ||
@@ -468,7 +481,14 @@ async function upsertLegacyOwnerMembership(user: SupabaseAuthUser) {
     const updated = await adminRestRequest<WorkspaceMember[]>(
       `workspace_members?id=eq.${encodeURIComponent(existing.id)}`,
       {
-        body: JSON.stringify({ role: "owner" }),
+        body: JSON.stringify({
+          accepted_at: existing.accepted_at ?? now,
+          email: normalizeIdentityEmail(user.email),
+          normalized_email: normalizeIdentityEmail(user.email),
+          role: "owner",
+          status: "active",
+          updated_at: now
+        }),
         headers: {
           Prefer: "return=representation"
         },
@@ -476,15 +496,20 @@ async function upsertLegacyOwnerMembership(user: SupabaseAuthUser) {
       }
     );
 
-    return updated[0] ?? { ...existing, role: "owner" as const };
+    return updated[0] ?? { ...existing, role: "owner" as const, status: "active" as const, updated_at: now };
   }
 
   const membership: WorkspaceMember = {
+    accepted_at: now,
+    email: normalizeIdentityEmail(user.email),
     id: `wm-${randomUUID()}`,
+    normalized_email: normalizeIdentityEmail(user.email),
+    status: "active",
     workspace_id: LEGACY_WORKSPACE_ID,
     user_id: user.id,
     role: "owner",
-    created_at: now
+    created_at: now,
+    updated_at: now
   };
 
   await adminRestRequest("workspace_members?on_conflict=workspace_id,user_id", {
@@ -601,9 +626,12 @@ export function legacyWorkspaceContext(): AuthWorkspaceContext {
     authType: "legacy",
     membership: {
       id: "legacy-admin-member",
+      email: "",
+      normalized_email: "",
       workspace_id: "legacy-workspace",
       user_id: "legacy-admin",
       role: "owner",
+      status: "active",
       created_at: now
     },
     user: null,
