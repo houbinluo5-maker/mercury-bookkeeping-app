@@ -355,6 +355,7 @@ export function AuthCallbackPanel() {
     if (typeof window === "undefined") {
       return {
         errorMessage: "",
+        errorCode: "",
         code: "",
         nextPath: "/",
         tokenPayload: null
@@ -366,13 +367,13 @@ export function AuthCallbackPanel() {
     const nextPath = requestedNext.startsWith("/") && !requestedNext.startsWith("//") && !requestedNext.startsWith("/login")
       ? requestedNext
       : "/";
-    const errorMessage =
-      query.get("error_description") || query.get("error") || query.get("message") || "";
+    const errorMessage = query.get("message") || query.get("error_description") || "";
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
     const accessToken = params.get("access_token") ?? "";
 
     return {
       code: query.get("code") ?? "",
+      errorCode: query.get("error") ?? "",
       errorMessage,
       nextPath,
       tokenPayload: accessToken ? {
@@ -388,13 +389,17 @@ export function AuthCallbackPanel() {
       return { message: callbackState.errorMessage, tone: "error" };
     }
 
+    if (callbackState.errorCode) {
+      return { message: t("oauthCallbackFailed"), tone: "error" };
+    }
+
     return callbackState.code || callbackState.tokenPayload?.access_token
       ? { message: t("securingSession"), tone: "loading" }
       : { message: t("oauthCallbackMissingSession"), tone: "error" };
   });
 
   useEffect(() => {
-    if (callbackState.errorMessage) {
+    if (callbackState.errorMessage || callbackState.errorCode) {
       return;
     }
 
