@@ -8,6 +8,7 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { YearSelect } from "@/components/period-selectors";
 import { ReconciliationLink } from "@/components/reconciliation-link";
+import { AlertBanner, FilterBar, SectionHeader } from "@/components/ui-primitives";
 import { getAvailableYears } from "@/lib/calculations";
 import { formatCurrency } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -181,12 +182,9 @@ export default function TaxPackagePage() {
         title={t("taxPackage")}
       />
 
-      <section className="notice border-amber-200 bg-amber-50">
-        <div className="flex gap-3">
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-          <p className="text-sm leading-6 text-amber-900">{t("taxPackageWarning")}</p>
-        </div>
-      </section>
+      <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-700" />} tone="warning">
+        <p>{t("taxPackageWarning")}</p>
+      </AlertBanner>
 
       <ReconciliationLink descriptionKey="reconciliationCenterTaxPackageNotice" />
 
@@ -213,7 +211,8 @@ export default function TaxPackagePage() {
         ) : null}
       </section>
 
-      <section className="surface-card p-4">
+      <FilterBar>
+        <SectionHeader description={t("taxPackageFilterHelp")} title={t("reportScope")} />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <YearSelect onChange={updateTaxYear} value={taxYear} years={years} />
           <label className="space-y-1">
@@ -296,7 +295,7 @@ export default function TaxPackagePage() {
             </p>
           </div>
         </div>
-      </section>
+      </FilterBar>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map(([labelKey, value, tone]) => (
@@ -304,7 +303,7 @@ export default function TaxPackagePage() {
         ))}
       </section>
 
-      <section className="surface-card space-y-3 p-4">
+      <section className="premium-panel space-y-4 p-5">
         <div>
           <h2 className="section-title">{t("cpaExportFiles")}</h2>
           <p className="section-subtitle">{t("taxPackageExportsHelp")}</p>

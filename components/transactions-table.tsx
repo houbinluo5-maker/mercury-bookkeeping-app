@@ -6,6 +6,7 @@ import { Download, Edit3, PlusCircle, Search } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button, buttonClassName } from "@/components/button";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
+import { DataTableShell, EmptyState, FilterBar } from "@/components/ui-primitives";
 import { downloadExcel } from "@/lib/export-excel";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -83,7 +84,8 @@ export function TransactionsTable({
   return (
     <div className="space-y-4">
       {!compact ? (
-        <div className="surface-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <FilterBar>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid gap-3 sm:grid-cols-[18rem_16rem_14rem]">
             <label className="relative block">
               <Search
@@ -131,6 +133,7 @@ export function TransactionsTable({
             </Link>
           </div>
         </div>
+        </FilterBar>
       ) : null}
 
       {!compact ? (
@@ -185,7 +188,7 @@ export function TransactionsTable({
         </div>
       ) : null}
 
-      <div className="surface-card overflow-hidden">
+      <DataTableShell title={compact ? undefined : t("ledgerWorkspace")} description={compact ? undefined : t("ledgerWorkspaceHelp")}>
         <div className={compact ? "overflow-x-auto" : "hidden overflow-x-auto md:block"}>
           <table className="min-w-full border-collapse">
             <thead className="table-head">
@@ -225,7 +228,7 @@ export function TransactionsTable({
                     </td>
                   ) : null}
                   {!compact ? (
-                    <td className="table-cell text-right">
+                  <td className="table-cell text-right">
                       <Button className="h-9 px-2" onClick={() => setEditingTransactionId(transaction.id)}>
                         <Edit3 aria-hidden="true" className="h-4 w-4" />
                         {t("edit")}
@@ -236,15 +239,15 @@ export function TransactionsTable({
               ))}
               {filtered.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={compact ? 6 : 8}>
-                    {t("emptyTransactions")}
+                  <td colSpan={compact ? 6 : 8}>
+                    <EmptyState description={t("emptyTransactionsHelp")} title={t("emptyTransactions")} />
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
-      </div>
+      </DataTableShell>
       <TransactionEditModal
         key={editingTransaction?.id ?? "transaction-edit-modal"}
         onClose={() => setEditingTransactionId(null)}

@@ -5,6 +5,7 @@ import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
+import { DataTableShell, EmptyState, FilterBar, SectionHeader } from "@/components/ui-primitives";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
@@ -108,7 +109,7 @@ export function ReceiptTable() {
 
   return (
     <div className="space-y-6">
-      <section className="surface-card p-4">
+      <section className="premium-panel p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="section-title">{t("missingReceipts")}</h2>
@@ -158,7 +159,9 @@ export function ReceiptTable() {
         ) : null}
       </section>
 
-      <div className="surface-card flex flex-wrap gap-2 p-3">
+      <FilterBar>
+      <SectionHeader description={t("receiptFilterHelp")} title={t("documentControl")} />
+      <div className="mt-4 flex flex-wrap gap-2">
         {filters.map((item) => (
           <Button
             className={filter === item ? "border-marine bg-marine text-white hover:bg-ink" : ""}
@@ -169,8 +172,9 @@ export function ReceiptTable() {
           </Button>
         ))}
       </div>
+      </FilterBar>
 
-      <div className="surface-card overflow-hidden">
+      <DataTableShell title={t("receiptQueue")} description={t("receiptQueueHelp")}>
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse">
             <thead className="table-head">
@@ -266,15 +270,15 @@ export function ReceiptTable() {
               })}
               {filteredTransactions.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-8 text-center text-sm text-slate-500" colSpan={6}>
-                    {t("noReceiptTransactions")}
+                  <td colSpan={6}>
+                    <EmptyState description={t("noReceiptTransactions")} title={t("allLinked")} />
                   </td>
                 </tr>
               ) : null}
             </tbody>
           </table>
         </div>
-      </div>
+      </DataTableShell>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
+import { AlertBanner, FilterBar, SectionHeader } from "@/components/ui-primitives";
 import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -675,14 +676,12 @@ export default function ReconciliationPage() {
         title={t("reconciliationCenter")}
       />
 
-      <section className="notice border-amber-200 bg-amber-50">
-        <div className="flex gap-3">
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-          <p className="text-sm leading-6 text-amber-900">{t("reconciliationCenterHelp")}</p>
-        </div>
-      </section>
+      <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-700" />} tone="warning">
+        <p>{t("reconciliationCenterHelp")}</p>
+      </AlertBanner>
 
-      <section className="surface-card p-4">
+      <FilterBar>
+        <SectionHeader description={t("reconciliationFilterHelp")} title={t("reviewScope")} />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <label className="space-y-1">
             <span className="form-label">{t("startDate")}</span>
@@ -785,7 +784,7 @@ export default function ReconciliationPage() {
             </select>
           </label>
         </div>
-      </section>
+      </FilterBar>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map(([labelKey, value, tone]) => (
