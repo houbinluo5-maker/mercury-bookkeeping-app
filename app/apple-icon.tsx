@@ -31,12 +31,12 @@ export default function AppleIcon() {
             width: "132px"
           }}
         >
-          <svg height="96" viewBox="0 0 48 48" width="96">
-            <path d="M13 14.75c0-1.24 1.01-2.25 2.25-2.25H24v23H15.25A2.25 2.25 0 0 1 13 33.25v-18.5Z" fill="#F8FAFC" />
-            <path d="M24 12.5h8.75c1.24 0 2.25 1.01 2.25 2.25v18.5c0 1.24-1.01 2.25-2.25 2.25H24v-23Z" fill="#E8F2EF" />
-            <path d="M24 12.5v23" stroke="#123A55" strokeLinecap="round" strokeWidth="2" />
-            <path d="M17.5 19.5h3.75M17.5 24h3.75M26.75 19.5h3.75M26.75 24h3.75" stroke="#123A55" strokeLinecap="round" strokeWidth="1.8" />
-            <path d="M15.5 31.25c5.05-4.92 11.95-4.92 17 0" fill="none" stroke="#287A68" strokeLinecap="round" strokeWidth="2.4" />
+          <svg height="106" viewBox="0 0 48 48" width="106">
+            <path d="M11 36V12h7.2L24 24.45 29.8 12H37v24h-6.15V24.45l-4.2 8.05h-5.3l-4.2-8.05V36H11Z" fill="#F8FAFC" />
+            <path d="M24 24.45 29.8 12H37v24h-6.15V24.45l-4.2 8.05H24v-8.05Z" fill="#E8F4F1" />
+            <path d="M18.2 12 24 24.45 29.8 12" fill="none" stroke="#14B8A6" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" />
+            <path d="M14.75 17.7h3.25M14.75 21.7h2.3M30.1 17.7h3.15M30.95 21.7h2.3" stroke="#0B1220" strokeLinecap="round" strokeWidth="1.45" />
+            <path d="M14.2 39h19.6" stroke="#14B8A6" strokeLinecap="round" strokeWidth="2.6" />
           </svg>
         </div>
       </div>

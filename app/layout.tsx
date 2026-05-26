@@ -6,7 +6,7 @@ import { BookkeepingProvider } from "@/lib/storage";
 export const metadata: Metadata = {
   applicationName: "Mercury Books",
   description:
-    "Executive Finance OS for ecommerce bookkeeping, receipts, reconciliation, monthly close, and CPA handoff.",
+    "Private finance operations workspace for ecommerce bookkeeping, receipts, reconciliation, monthly close, and CPA handoff.",
   icons: {
     apple: [{ sizes: "180x180", type: "image/png", url: "/apple-icon" }],
     icon: [{ sizes: "32x32", type: "image/png", url: "/icon" }]
