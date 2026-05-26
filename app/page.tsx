@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Download, PlusCircle } from "lucide-react";
+import { Download, FileSpreadsheet, PlusCircle, ReceiptText, Upload, Wand2 } from "lucide-react";
 import { Button, buttonClassName } from "@/components/button";
 import { Badge } from "@/components/badge";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { ReconciliationLink } from "@/components/reconciliation-link";
 import { TransactionsTable } from "@/components/transactions-table";
+import { ActionPanel, CommandCard, SectionHeader } from "@/components/ui-primitives";
 import { filterByYear, getDashboardStats } from "@/lib/calculations";
 import { downloadExcel } from "@/lib/export-excel";
 import { formatCurrency } from "@/lib/format";
@@ -23,6 +24,20 @@ export default function DashboardPage() {
   const yearClosings = monthlyClosings.filter((closing) => closing.year === settings.tax_year);
   const reopenedCount = yearClosings.filter((closing) => closing.status === "reopened").length;
   const closedCount = yearClosings.filter((closing) => closing.status === "closed").length;
+  const expenses = yearTransactions.reduce((total, transaction) => total + transaction.money_out, 0);
+  const needsReviewCount = yearTransactions.filter((transaction) =>
+    [transaction.category, transaction.tax_line, transaction.notes].some((value) =>
+      value.toLowerCase().includes("needs review")
+    )
+  ).length;
+  const closeReadiness = Math.max(
+    0,
+    100 -
+    stats.unreconciled_count * 8 -
+      stats.receipts_missing_count * 10 -
+      needsReviewCount * 6 -
+      reopenedCount * 12
+  );
 
   return (
     <div className="space-y-6">
@@ -39,9 +54,7 @@ export default function DashboardPage() {
             </Link>
           </>
         }
-        eyebrow={`${settings.company_name} - ${settings.tax_year} - ${
-          settings.business_type_tax_notes || settings.entity_type
-        }`}
+        eyebrow={t("executiveFinanceOs")}
         description={t("dashboardSaasDescription")}
         title={t("dashboard")}
       />
@@ -54,25 +67,82 @@ export default function DashboardPage() {
           tone={stats.net_income >= 0 ? "blue" : "red"}
           value={formatCurrency(stats.net_income)}
         />
+        <MetricCard label={t("expenses")} value={formatCurrency(expenses)} tone="amber" />
         <MetricCard
-          detail={`${stats.unreconciled_count} ${t("transactions")}`}
-          label={t("needsReconciliation")}
-          tone={stats.unreconciled_count ? "amber" : "green"}
-          value={formatCurrency(
-            yearTransactions
-              .filter((transaction) => !transaction.reconciled)
-              .reduce((total, transaction) => total + transaction.money_in + transaction.money_out, 0)
-          )}
-        />
-        <MetricCard
-          detail={`${stats.receipts_missing_count} / ${stats.receipts_required_count} ${t("required")}`}
-          label={t("missingReceipts")}
-          tone={stats.receipts_missing_count ? "red" : "green"}
-          value={`${stats.receipts_missing_count}`}
+          detail={`${closedCount} ${t("closedStatus")} / ${reopenedCount} ${t("reopenedStatus")}`}
+          label={t("monthCloseReadiness")}
+          tone={closeReadiness >= 80 ? "green" : closeReadiness >= 55 ? "amber" : "red"}
+          value={`${closeReadiness}%`}
         />
       </section>
 
       <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
+
+      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="premium-panel p-5">
+          <SectionHeader description={t("bookkeepingHealthHelp")} title={t("financeHealthPanel")} />
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {[
+              [t("missingReceipts"), stats.receipts_missing_count, stats.receipts_missing_count ? "red" : "green"],
+              [t("needsReview"), needsReviewCount, needsReviewCount ? "amber" : "green"],
+              [t("unreconciled"), stats.unreconciled_count, stats.unreconciled_count ? "amber" : "green"],
+              [t("closedStatus"), closedCount, closedCount ? "green" : "neutral"]
+            ].map(([label, value, tone]) => (
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-3" key={String(label)}>
+                <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+                <div className="mt-2 flex items-end justify-between">
+                  <p className="text-2xl font-semibold text-ink tabular-nums">{value}</p>
+                  <Badge tone={tone as "neutral" | "green" | "amber" | "red" | "blue"}>
+                    {Number(value) ? t("actionNeeded") : t("ready")}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <ActionPanel description={t("quickActionsHelp")} title={t("quickActions")}>
+          <Link className={buttonClassName("primary", "w-full justify-start")} href="/transactions/new">
+            <PlusCircle aria-hidden="true" className="h-4 w-4" />
+            {t("addTransaction")}
+          </Link>
+          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/imports/mercury">
+            <Upload aria-hidden="true" className="h-4 w-4" />
+            {t("importMercuryCsv")}
+          </Link>
+          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/receipts">
+            <ReceiptText aria-hidden="true" className="h-4 w-4" />
+            {t("uploadReceipt")}
+          </Link>
+          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/reconciliation">
+            <Wand2 aria-hidden="true" className="h-4 w-4" />
+            {t("openReconciliationCenter")}
+          </Link>
+        </ActionPanel>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <CommandCard
+          action={
+            <Link className="text-sm font-semibold text-marine hover:text-ink" href="/reports/tax-package">
+              {t("taxPackage")}
+            </Link>
+          }
+          description={t("cpaReadinessHelp")}
+          icon={<FileSpreadsheet aria-hidden="true" className="h-5 w-5" />}
+          title={t("cpaReadiness")}
+        />
+        <CommandCard
+          description={`${stats.receipts_missing_count} ${t("missingReceipts")} / ${needsReviewCount} ${t("needsReview")}`}
+          icon={<ReceiptText aria-hidden="true" className="h-5 w-5" />}
+          title={t("reviewQueue")}
+        />
+        <CommandCard
+          description={`${closedCount} ${t("closedStatus")} / ${reopenedCount} ${t("reopenedStatus")}`}
+          icon={<Wand2 aria-hidden="true" className="h-5 w-5" />}
+          title={t("monthCloseReadiness")}
+        />
+      </section>
 
       <section className="surface-card p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -81,12 +151,8 @@ export default function DashboardPage() {
             <p className="section-subtitle">{t("bookkeepingHealthHelp")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={closedCount ? "green" : "neutral"}>
-              {t("closedStatus")}: {closedCount}
-            </Badge>
-            <Badge tone={reopenedCount ? "amber" : "green"}>
-              {t("reopenedStatus")}: {reopenedCount}
-            </Badge>
+            <Badge tone={closedCount ? "green" : "neutral"}>{t("closedStatus")}: {closedCount}</Badge>
+            <Badge tone={reopenedCount ? "amber" : "green"}>{t("reopenedStatus")}: {reopenedCount}</Badge>
           </div>
         </div>
         {reopenedCount ? (

@@ -5,6 +5,7 @@ import { AlertTriangle, Database, Download, FileJson, RotateCcw, Save, Trash2, U
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
+import { AlertBanner, SectionHeader } from "@/components/ui-primitives";
 import { accountOptions, defaultSettings } from "@/lib/seed-data";
 import { downloadExcel } from "@/lib/export-excel";
 import { useI18n } from "@/lib/i18n";
@@ -194,11 +195,8 @@ export default function SettingsPage() {
       />
 
       <form className="space-y-6" onSubmit={submit}>
-        <section className="surface-card space-y-4 p-4">
-          <div>
-            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("companySettings")}</h2>
-            <p className="mt-1 text-sm text-slate-600">{t("companySettingsHelp")}</p>
-          </div>
+        <section className="surface-card space-y-4 p-5">
+          <SectionHeader description={t("companySettingsHelp")} title={t("companyProfile")} />
 
           <section className="grid gap-4 md:grid-cols-2">
             <label className="space-y-1">
@@ -293,7 +291,7 @@ export default function SettingsPage() {
         </section>
       </form>
 
-      <section className="surface-card space-y-4 p-4">
+      <section className="premium-panel space-y-4 p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold tracking-normal text-ink">{t("supabasePersistence")}</h2>
@@ -303,21 +301,19 @@ export default function SettingsPage() {
         </div>
 
         {(storageStatus.mode === "local" && !supabaseConnected) || storageStatus.mode === "error" ? (
-          <div className="notice flex gap-3 border-amber-200 bg-amber-50 text-amber-800">
-            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-4 w-4 text-amber-700" />} tone="warning">
             <p>
               {storageStatus.mode === "error"
                 ? storageStatus.message
                 : t("localStorageFallbackWarning")}
             </p>
-          </div>
+          </AlertBanner>
         ) : null}
 
         {supabaseConnected ? (
-          <div className="notice flex gap-3 border-blue-200 bg-blue-50 text-blue-800">
-            <Database aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <AlertBanner icon={<Database aria-hidden="true" className="h-4 w-4 text-blue-700" />} tone="info">
             <p>{backupWriteDisabledNotice}</p>
-          </div>
+          </AlertBanner>
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-3">
@@ -426,13 +422,12 @@ export default function SettingsPage() {
         ) : null}
       </section>
 
-      <section className="surface-card space-y-4 p-4">
+      <section className="surface-card space-y-4 p-5">
         <div>
-          <h2 className="text-lg font-semibold tracking-normal text-ink">{t("dataManagement")}</h2>
-          <div className="notice mt-3 flex gap-3 border-amber-200 bg-amber-50 text-amber-800">
-            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+          <SectionHeader description={t("backupDataToolsHelp")} title={t("backupDataTools")} />
+          <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-4 w-4 text-amber-700" />} tone="warning">
             <p>{t("dataManagementWarning")}</p>
-          </div>
+          </AlertBanner>
         </div>
 
         <section className="grid gap-4 md:grid-cols-3">

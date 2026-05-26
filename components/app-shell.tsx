@@ -15,6 +15,7 @@ import {
   PlusCircle,
   ReceiptText,
   Settings,
+  ShieldCheck,
   Upload,
   WalletCards
 } from "lucide-react";
@@ -24,11 +25,16 @@ import { useI18n } from "@/lib/i18n";
 
 const navGroups = [
   {
-    labelKey: "coreNav",
+    labelKey: "commandNav",
     items: [
       { href: "/", labelKey: "dashboard", icon: LayoutDashboard },
       { href: "/transactions/new", labelKey: "addTransaction", icon: PlusCircle },
-      { href: "/transactions", labelKey: "transactions", icon: ListChecks },
+      { href: "/transactions", labelKey: "transactions", icon: ListChecks }
+    ]
+  },
+  {
+    labelKey: "importsNav",
+    items: [
       { href: "/imports/mercury", labelKey: "importMercuryCsv", icon: Upload }
     ]
   },
@@ -51,7 +57,7 @@ const navGroups = [
     ]
   },
   {
-    labelKey: "setupNav",
+    labelKey: "systemNav",
     items: [
       { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
       { href: "/settings", labelKey: "settings", icon: Settings }
@@ -77,22 +83,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-paper">
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white xl:block">
-        <div className="flex h-20 items-center gap-3 border-b border-slate-200 px-5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-marine text-white shadow-sm">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-slate-200 bg-[#fbfaf7] xl:flex">
+        <div className="border-b border-slate-200 px-5 py-5">
+          <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-ink text-white shadow-sm">
             <WalletCards aria-hidden="true" className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">Mercury Bookkeeping</p>
-            <p className="truncate text-xs font-medium text-slate-500">
-              {settings.company_name}
-            </p>
-            <p className="truncate text-xs text-slate-400">
-              {settings.business_type_tax_notes || settings.entity_type}
-            </p>
+            <p className="truncate text-xs font-medium text-slate-500">{t("executiveFinanceOs")}</p>
+          </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm">
+            <p className="truncate text-sm font-semibold text-ink">{settings.company_name}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span>{settings.tax_year}</span>
+              <span className="h-1 w-1 rounded-full bg-slate-300" />
+              <span className="truncate">{settings.business_type_tax_notes || settings.entity_type}</span>
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs font-medium text-mint">
+              <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
+              <span>{t("cpaReadyWorkspace")}</span>
+            </div>
           </div>
         </div>
-        <div className="flex h-[calc(100vh-5rem)] flex-col justify-between">
+        <div className="flex min-h-0 flex-1 flex-col justify-between">
           <nav className="space-y-5 overflow-y-auto px-3 py-5">
             {navGroups.map((group) => (
               <div key={group.labelKey}>
@@ -109,8 +124,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         className={clsx(
                           "flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium transition",
                           active
-                            ? "bg-marine text-white shadow-sm"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-ink"
+                            ? "bg-ink text-white shadow-sm"
+                            : "text-slate-600 hover:bg-white hover:text-ink hover:shadow-sm"
                         )}
                         href={item.href}
                         key={item.href}
