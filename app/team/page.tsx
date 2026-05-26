@@ -47,6 +47,14 @@ type TeamState = {
   };
 };
 
+type TeamActionResponse = {
+  email_delivery?: {
+    message?: string;
+    status: "sent" | "not_configured" | "failed";
+  };
+  error?: string;
+};
+
 async function fetchTeamState(t: (key: string) => string) {
   const response = await fetch("/api/team", { cache: "no-store" });
   const body = await response.json();
@@ -88,6 +96,7 @@ export default function TeamPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "warning">("success");
   const [role, setRole] = useState<"admin" | "viewer" | "cpa">("viewer");
   const [submitting, setSubmitting] = useState(false);
   const [team, setTeam] = useState<TeamState | null>(null);
@@ -125,6 +134,7 @@ export default function TeamPage() {
     setSubmitting(true);
     setError("");
     setMessage("");
+    setMessageTone("success");
 
     try {
       const response = await fetch("/api/team", {
@@ -134,18 +144,18 @@ export default function TeamPage() {
         },
         method: "POST"
       });
-      const body = await response.json();
+      const body = (await response.json()) as TeamActionResponse;
 
       if (!response.ok) {
         throw new Error(body.error || t("teamActionError"));
       }
 
-      setMessage(successMessage);
+      if (successMessage) setMessage(successMessage);
       await loadTeam();
-      return true;
+      return body;
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : t("teamActionError"));
-      return false;
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -153,8 +163,21 @@ export default function TeamPage() {
 
   async function inviteMember(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const invited = await postTeamAction({ action: "invite", email, role }, t("invitationCreated"));
-    if (invited) setEmail("");
+    const result = await postTeamAction({ action: "invite", email, role }, "");
+    if (!result) return;
+
+    if (result.email_delivery?.status === "sent") {
+      setMessage(t("invitationEmailSent"));
+      setMessageTone("success");
+    } else if (result.email_delivery?.status === "failed") {
+      setMessage(t("invitationEmailFailedFallback"));
+      setMessageTone("warning");
+    } else {
+      setMessage(t("invitationCreatedManualFallback"));
+      setMessageTone("warning");
+    }
+
+    setEmail("");
   }
 
   async function copyInviteLink(invitation: TeamInvitation) {
@@ -174,7 +197,7 @@ export default function TeamPage() {
       />
 
       {message ? (
-        <AlertBanner tone="success">
+        <AlertBanner tone={messageTone}>
           <p className="text-sm font-semibold">{message}</p>
         </AlertBanner>
       ) : null}

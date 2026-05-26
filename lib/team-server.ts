@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createAuditEntry } from "@/lib/audit";
+import { sendWorkspaceInvitationEmail } from "@/lib/invite-email-server";
 import { getSupabaseConfig } from "@/lib/supabase-server";
 import {
   normalizeIdentityEmail,
@@ -161,6 +162,16 @@ function publicInvitation(invitation: WorkspaceInvitation, origin?: string): Tea
   };
 }
 
+async function deliverTeamInvitationEmail(invitation: WorkspaceInvitation, workspace: Workspace, origin: string) {
+  return sendWorkspaceInvitationEmail({
+    expiresAt: invitation.expires_at,
+    inviteUrl: inviteUrl(origin, invitation.token),
+    roleLabel: roleLabel(invitation.role),
+    to: invitation.email,
+    workspaceName: workspace.name || "Mercury Books Workspace"
+  });
+}
+
 async function appendTeamAuditLog({
   action,
   actor,
@@ -282,6 +293,7 @@ export async function createTeamInvitation(
 
   if (existingInvitation && new Date(existingInvitation.expires_at).getTime() > Date.now()) {
     return {
+      email_delivery: await deliverTeamInvitationEmail(existingInvitation, auth.workspace, origin),
       invitation: publicInvitation(existingInvitation, origin),
       reused: true
     };
@@ -325,6 +337,7 @@ export async function createTeamInvitation(
   });
 
   return {
+    email_delivery: await deliverTeamInvitationEmail(savedInvitation, auth.workspace, origin),
     invitation: publicInvitation(savedInvitation, origin),
     reused: false
   };

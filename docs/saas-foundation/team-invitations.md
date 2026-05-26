@@ -17,11 +17,23 @@ Owner invitations and owner role changes are not supported in this phase.
 
 1. A permitted member creates an invitation from `/team`.
 2. The app stores a `workspace_invitations` row with a secure token, normalized email, role, status, expiry, and inviter.
-3. Email sending is not implemented yet. The UI clearly shows a copyable invite URL for manual delivery.
-4. Pending invitations can be revoked by the workspace owner.
-5. Accepted invitations are marked `accepted` and linked to the accepting authenticated user.
+3. If `RESEND_API_KEY` and `INVITE_EMAIL_FROM` are configured, the app sends an invitation email through Resend.
+4. If email delivery is not configured or delivery fails, the invite is still created and the UI clearly shows a copyable invite URL for manual delivery.
+5. Pending invitations can be revoked by the workspace owner.
+6. Accepted invitations are marked `accepted` and linked to the accepting authenticated user.
 
 Invitation tokens are used in invite URLs. They are not written into audit log details.
+
+## Email Delivery
+
+Invitation email delivery is optional and server-only:
+
+- `RESEND_API_KEY`: Resend API key.
+- `INVITE_EMAIL_FROM`: verified sender address, for example `Mercury Books <invites@example.com>`.
+
+The email subject is `You’ve been invited to Mercury Books`. The body includes the workspace name, invited role, invite link, and expiration note.
+
+Missing email environment variables do not fail invitation creation. The Team page shows `Invite created. Copy the link manually.` and keeps the copy-link fallback available.
 
 ## Accept Flow
 
@@ -60,6 +72,8 @@ Audit entries are workspace-scoped and include actor user ID and actor email whe
 - Owner can open `/team`.
 - Owner can create an Admin, Viewer, or CPA invitation.
 - Pending invitation appears with a copyable invite URL.
+- With Resend env vars configured, invitation email is sent automatically.
+- Without Resend env vars configured, invitation creation succeeds and copy-link fallback is shown.
 - Invite URL opens `/invite/[token]`.
 - Logged-out users are redirected to login with the invite path preserved.
 - Same-email logged-in user can accept the invitation.
