@@ -156,6 +156,8 @@ ALLOW_PUBLIC_SIGNUP=false
 ENABLE_GOOGLE_LOGIN=false
 ENABLE_GITHUB_LOGIN=false
 ENABLE_MICROSOFT_LOGIN=false
+RESEND_API_KEY=
+INVITE_EMAIL_FROM=
 ```
 
 Supabase is optional for local development. Leave these empty to keep using browser `localStorage`, or set them after creating the database schema:
@@ -166,6 +168,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ```
 
 Receipt file upload also uses the server-only Supabase variables. Do not expose the service role key to browser code or any `NEXT_PUBLIC_*` variable.
+
+Team invitation email delivery is optional. Set `RESEND_API_KEY` and `INVITE_EMAIL_FROM` to send invite emails automatically; otherwise invitations are still created and the Team page shows the copy invite link fallback.
 
 If `ADMIN_PASSWORD` is missing, the login page shows a setup warning in development and protected pages redirect to `/login`.
 
@@ -335,6 +339,8 @@ ALLOW_PUBLIC_SIGNUP=false
 ENABLE_GOOGLE_LOGIN=false
 ENABLE_GITHUB_LOGIN=false
 ENABLE_MICROSOFT_LOGIN=false
+RESEND_API_KEY=your-server-only-resend-api-key
+INVITE_EMAIL_FROM="Mercury Books <invites@yourdomain.com>"
 ```
 
 Redeploy after changing environment variables.
