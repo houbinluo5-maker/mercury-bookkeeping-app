@@ -5,7 +5,8 @@ export type AuditEntityType =
   | "receipt"
   | "settings"
   | "category"
-  | "reconciliation";
+  | "reconciliation"
+  | "workspace";
 export type AuditActor = "admin" | "system" | string;
 export type AuditSource =
   | "manual"
@@ -29,7 +30,8 @@ export type AuditAction =
   | "tax_line_change"
   | "resolve_review"
   | "dismiss_duplicate"
-  | "note_change";
+  | "note_change"
+  | "workspace_claimed";
 
 export type MonthlyClosingStatus = "open" | "ready_to_close" | "closed" | "reopened";
 

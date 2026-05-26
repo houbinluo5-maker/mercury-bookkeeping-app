@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import {
+  ACTIVE_WORKSPACE_COOKIE,
   AUTH_COOKIE_NAME,
   SUPABASE_ACCESS_TOKEN_COOKIE,
   getExpectedAuthToken,
@@ -19,7 +20,8 @@ export async function getAuthenticatedContext(request: NextRequest): Promise<Aut
   if (supabaseToken) {
     try {
       const user = await getUserFromAccessToken(supabaseToken);
-      return getWorkspaceContextForUser(user);
+      const preferredWorkspaceId = request.cookies.get(ACTIVE_WORKSPACE_COOKIE)?.value;
+      return getWorkspaceContextForUser(user, preferredWorkspaceId);
     } catch {
       return null;
     }
