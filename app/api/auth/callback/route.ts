@@ -10,6 +10,9 @@ import {
 } from "@/lib/supabase-auth-server";
 
 const secure = process.env.NODE_ENV === "production";
+const genericOAuthError = "OAuth sign-in could not be completed. Please start sign-in again.";
+const missingVerifierError =
+  "OAuth sign-in expired or was started in another browser session. Please start sign-in again.";
 
 function safeNextPath(value: string | null | undefined) {
   return value && isSafeRedirectPath(value) ? value : "/";
@@ -38,11 +41,29 @@ function callbackErrorRedirect(request: NextRequest, nextPath: string, message: 
   return response;
 }
 
+function safeCallbackMessage(message: string | null | undefined) {
+  const trimmed = message?.trim() ?? "";
+
+  if (!trimmed || trimmed === "oauth_callback") {
+    return genericOAuthError;
+  }
+
+  return trimmed.replace(/[\r\n]+/g, " ").slice(0, 500);
+}
+
+function providerErrorMessage(request: NextRequest) {
+  return safeCallbackMessage(
+    request.nextUrl.searchParams.get("message") ||
+      request.nextUrl.searchParams.get("error_description") ||
+      request.nextUrl.searchParams.get("error")
+  );
+}
+
 async function exchangeCode(request: NextRequest, code: string, nextPath: string) {
   const codeVerifier = request.cookies.get(SUPABASE_OAUTH_CODE_VERIFIER_COOKIE)?.value ?? "";
 
   if (!codeVerifier) {
-    throw new Error("OAuth session verifier was not found. Please start sign-in again.");
+    throw new Error(missingVerifierError);
   }
 
   const session = await exchangeOAuthCodeForSession(code, codeVerifier);
@@ -58,6 +79,10 @@ async function exchangeCode(request: NextRequest, code: string, nextPath: string
 export async function GET(request: NextRequest) {
   const nextPath = safeNextPath(request.nextUrl.searchParams.get("next"));
   const code = request.nextUrl.searchParams.get("code");
+
+  if (request.nextUrl.searchParams.get("error") || request.nextUrl.searchParams.get("error_description")) {
+    return callbackErrorRedirect(request, nextPath, providerErrorMessage(request));
+  }
 
   if (!code) {
     return callbackErrorRedirect(request, nextPath, "No OAuth authorization code was returned. Please start sign-in again.");

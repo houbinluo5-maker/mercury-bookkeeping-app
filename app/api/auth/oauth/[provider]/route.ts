@@ -49,7 +49,7 @@ export async function GET(
 
   const requestedNext = request.nextUrl.searchParams.get("next") ?? "/";
   const nextPath = isSafeRedirectPath(requestedNext) ? requestedNext : "/";
-  const callbackUrl = new URL("/auth/callback", request.url);
+  const callbackUrl = new URL("/api/auth/callback", request.url);
   callbackUrl.searchParams.set("next", nextPath);
 
   const codeVerifier = createCodeVerifier();
