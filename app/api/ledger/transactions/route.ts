@@ -6,7 +6,7 @@ import {
   auditSources,
   type TransactionAuditOptions
 } from "@/lib/audit";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   createSupabaseTransaction,
   deleteSupabaseTransaction,
@@ -446,8 +446,19 @@ function validateImportTransactions(value: unknown) {
   return value.map((transaction) => validateTransaction(transaction));
 }
 
+function withAuthenticatedActor<T extends { actor?: AuditActor }>(
+  audit: T,
+  auth: Awaited<ReturnType<typeof getAuthenticatedContext>>
+) {
+  return {
+    ...audit,
+    actor: auth?.user?.email ?? audit.actor ?? "admin"
+  };
+}
+
 export async function POST(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -457,7 +468,8 @@ export async function POST(request: NextRequest) {
     if (action === "create") {
       const result = await createSupabaseTransaction(
         validateTransaction(body.transaction),
-        validateCreateAudit(body.audit, "manual")
+        withAuthenticatedActor(validateCreateAudit(body.audit, "manual"), auth),
+        auth.workspace.id
       );
 
       return ok({ transaction: result.transaction, audit_logs: result.audit_logs });
@@ -468,7 +480,8 @@ export async function POST(request: NextRequest) {
       const result = await updateSupabaseTransaction(
         id,
         validateTransactionPatch(body.transaction),
-        validateUpdateAudit(body.audit)
+        withAuthenticatedActor(validateUpdateAudit(body.audit), auth),
+        auth.workspace.id
       );
 
       return ok({ transaction: result.transaction, audit_logs: result.audit_logs });
@@ -478,7 +491,8 @@ export async function POST(request: NextRequest) {
       const id = readId(body);
       const result = await deleteSupabaseTransaction(
         id,
-        validateCreateAudit(body.audit, "manual")
+        withAuthenticatedActor(validateCreateAudit(body.audit, "manual"), auth),
+        auth.workspace.id
       );
 
       return ok({ id, audit_logs: result.audit_logs });
@@ -487,7 +501,8 @@ export async function POST(request: NextRequest) {
     if (action === "import") {
       const result = await importSupabaseTransactions(
         validateImportTransactions(body.transactions),
-        validateCreateAudit(body.audit, "csv_import")
+        withAuthenticatedActor(validateCreateAudit(body.audit, "csv_import"), auth),
+        auth.workspace.id
       );
 
       return ok({ transactions: result.transactions, audit_logs: result.audit_logs });

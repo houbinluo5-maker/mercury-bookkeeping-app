@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { normalizeAuditLogs } from "@/lib/audit";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   appendSupabaseAuditLogs,
   isSupabaseConfigured,
@@ -49,11 +49,12 @@ function supabaseError(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const data = await loadSupabaseAuditLogs();
+    const data = await loadSupabaseAuditLogs(auth.workspace.id);
 
     return NextResponse.json({
       apiStatus: 200,
@@ -69,7 +70,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const data = await appendSupabaseAuditLogs(entries);
+    const data = await appendSupabaseAuditLogs(entries, auth.workspace.id);
 
     return NextResponse.json({
       apiStatus: 200,

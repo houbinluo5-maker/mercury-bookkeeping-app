@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   isSupabaseConfigured,
   loadSupabaseBackup
@@ -48,11 +48,12 @@ function supabaseError(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const data = await loadSupabaseBackup();
+    const data = await loadSupabaseBackup(auth.workspace.id);
 
     return NextResponse.json({
       apiStatus: 200,
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  if (!(await getAuthenticatedContext(request))) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   return NextResponse.json(

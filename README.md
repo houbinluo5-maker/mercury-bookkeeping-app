@@ -144,10 +144,18 @@ Create a local environment file first:
 cp .env.example .env.local
 ```
 
-Set an admin password:
+Configure authentication. Supabase Auth is the primary account system; `ADMIN_PASSWORD` is a temporary legacy fallback:
 
 ```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ADMIN_PASSWORD=choose-a-long-private-password
+ALLOW_PUBLIC_SIGNUP=false
+ENABLE_GOOGLE_LOGIN=false
+ENABLE_GITHUB_LOGIN=false
+ENABLE_MICROSOFT_LOGIN=false
 ```
 
 Supabase is optional for local development. Leave these empty to keep using browser `localStorage`, or set them after creating the database schema:
@@ -157,7 +165,7 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
 ```
 
-Receipt file upload also uses these server-only Supabase variables. Do not expose the service role key to browser code or any `NEXT_PUBLIC_*` variable.
+Receipt file upload also uses the server-only Supabase variables. Do not expose the service role key to browser code or any `NEXT_PUBLIC_*` variable.
 
 If `ADMIN_PASSWORD` is missing, the login page shows a setup warning in development and protected pages redirect to `/login`.
 
@@ -177,16 +185,28 @@ npm run build
 npm audit
 ```
 
-## MVP Private Access
+## Authentication and Workspace Access
 
-This app uses a deliberately simple MVP auth layer for private deployment:
+Mercury Books supports Supabase Auth email/password login, Google OAuth, and provider-ready GitHub/Microsoft flags. A new account receives a profile, an owner workspace, and a workspace membership. Server APIs verify the logged-in user and scope Supabase persistence by workspace before reading or writing ledger data.
 
-- `/login` validates the submitted password against server-side `ADMIN_PASSWORD`.
-- Successful login sets an HTTP-only cookie.
-- Middleware requires that cookie before accessing Dashboard, Transactions, Reconciliation Center, Audit Trail, Reports, Receipts, Accounts, and Settings.
-- The sidebar and mobile header include a logout button.
+- `/login` supports email/password and enabled OAuth providers.
+- `/register` creates a Supabase Auth user and owner workspace when signup is allowed.
+- `/forgot-password` and `/reset-password` use Supabase Auth password recovery.
+- `/account` shows user, workspace, and role context.
+- `ADMIN_PASSWORD` remains available only through the legacy fallback panel.
 
-This is not a full user management system. Supabase auth is intentionally not enabled yet; future production auth can replace this layer when multi-user access, password reset, roles, and audit trails are needed.
+Public signup is closed by default after the first owner exists unless `ALLOW_PUBLIC_SIGNUP=true`.
+
+### Google Login Setup
+
+1. Enable the Google provider in Supabase Auth Providers.
+2. Create a Google OAuth client ID in Google Cloud.
+3. Add local and production domains as authorized JavaScript origins.
+4. Add the Supabase Auth callback URL as an authorized redirect URI.
+5. Add the app `/auth/callback` URL to the Supabase redirect allow list.
+6. Set the Supabase Site URL to the production app URL.
+7. Add `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in Vercel.
+8. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
 
 ## Folder Structure
 
@@ -250,7 +270,7 @@ Audit history rows include:
 
 ## Supabase Persistence
 
-Supabase is the primary data source when both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured. Supabase Auth is not used yet; the existing `ADMIN_PASSWORD` login remains the access gate.
+Supabase is the primary data source when both `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured. Supabase Auth provides account login, while server routes continue to use the service role key privately for protected database and storage operations.
 
 ### Create A Supabase Project
 
@@ -309,6 +329,12 @@ In Vercel, add these variables for the deployed app:
 ADMIN_PASSWORD=choose-a-long-private-password
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-server-only-service-role-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+ALLOW_PUBLIC_SIGNUP=false
+ENABLE_GOOGLE_LOGIN=false
+ENABLE_GITHUB_LOGIN=false
+ENABLE_MICROSOFT_LOGIN=false
 ```
 
 Redeploy after changing environment variables.

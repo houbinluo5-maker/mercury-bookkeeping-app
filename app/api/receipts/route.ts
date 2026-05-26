@@ -10,7 +10,7 @@ import {
   validateReceiptFile,
   type ReceiptFileValidationError
 } from "@/lib/receipt-files";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase-server";
 
 type StorageErrorBody = {
@@ -134,7 +134,8 @@ async function deleteStoredReceipt(path: string) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -159,7 +160,8 @@ export async function POST(request: NextRequest) {
 
     const contentType = getReceiptContentType(file);
     const storagePath = [
-      "transactions",
+      "receipts",
+      sanitizePathSegment(auth.workspace.id),
       sanitizePathSegment(transactionId),
       `${Date.now()}-${randomUUID()}-${sanitizeFileName(file)}`
     ].join("/");
@@ -201,7 +203,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -215,6 +218,10 @@ export async function DELETE(request: NextRequest) {
         { error: "Only receipt files uploaded by this app can be deleted from Supabase Storage." },
         { status: 400 }
       );
+    }
+
+    if (path.startsWith("receipts/") && !path.startsWith(`receipts/${auth.workspace.id}/`)) {
+      return NextResponse.json({ error: "Receipt path does not belong to this workspace." }, { status: 403 });
     }
 
     await deleteStoredReceipt(path);

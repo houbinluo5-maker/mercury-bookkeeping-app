@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   closeSupabaseMonthlyClosing,
   isSupabaseConfigured,
@@ -129,11 +129,12 @@ function readSummary(record: JsonRecord) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const closings = await loadSupabaseMonthlyClosings();
+    const closings = await loadSupabaseMonthlyClosings(auth.workspace.id);
     const exportType = request.nextUrl.searchParams.get("export");
 
     if (exportType === "summary") {
@@ -195,7 +196,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -217,7 +219,8 @@ export async function POST(request: NextRequest) {
           summary.unreconciled_count * 3 -
           summary.possible_duplicates_count * 6
         )),
-        summary
+        summary,
+        auth.workspace.id
       );
 
       return ok({
@@ -228,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "reopen") {
-      const result = await reopenSupabaseMonthlyClosing(year, month, readReason(body));
+      const result = await reopenSupabaseMonthlyClosing(year, month, readReason(body), auth.workspace.id);
 
       return ok({
         audit_logs: result.audit_logs,
@@ -238,7 +241,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "update_summary") {
-      const result = await updateSupabaseMonthlyClosingSummary(year, month, readSummary(body));
+      const result = await updateSupabaseMonthlyClosingSummary(year, month, readSummary(body), auth.workspace.id);
 
       return ok({
         audit_logs: result.audit_logs,
