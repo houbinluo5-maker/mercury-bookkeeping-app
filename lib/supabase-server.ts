@@ -37,6 +37,7 @@ type SupabaseConfig = {
 
 type CompanySettingsRow = {
   id: "default";
+  workspace_id?: string;
   company_name: string;
   tax_year: number;
   default_currency: string;
@@ -49,6 +50,7 @@ type CompanySettingsRow = {
 
 type ReceiptRow = {
   transaction_id: string;
+  workspace_id?: string;
   receipt_required: boolean;
   receipt_link: string;
   reconciled: boolean;
@@ -78,6 +80,14 @@ type SupabaseErrorBody = {
 
 function normalizeSupabaseUrl(value: string) {
   return value.replace(/\/+$/, "");
+}
+
+function workspaceFilter(workspaceId?: string) {
+  return workspaceId ? `&workspace_id=eq.${encodeURIComponent(workspaceId)}` : "";
+}
+
+function withWorkspace<T extends object>(value: T, workspaceId?: string): T & { workspace_id?: string } {
+  return workspaceId ? { ...value, workspace_id: workspaceId } : value;
 }
 
 export function getSupabaseConfig(): SupabaseConfig | null {
@@ -175,9 +185,10 @@ function fromSettingsRow(row: Partial<CompanySettingsRow> | null | undefined): A
   });
 }
 
-function toReceiptRows(transactions: Transaction[]): ReceiptRow[] {
+function toReceiptRows(transactions: Transaction[], workspaceId?: string): ReceiptRow[] {
   return transactions.map((transaction) => ({
     transaction_id: transaction.id,
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
     receipt_required: transaction.receipt_required,
     receipt_link: transaction.receipt_link,
     reconciled: transaction.reconciled
@@ -395,40 +406,40 @@ async function insertIgnoreRows<T extends object>(
   });
 }
 
-async function loadSupabaseTransactionById(config: SupabaseConfig, id: string) {
+async function loadSupabaseTransactionById(config: SupabaseConfig, id: string, workspaceId?: string) {
   const rows = await supabaseRequest<Transaction[]>(
     config,
-    `transactions?select=*&id=eq.${encodeURIComponent(id)}&limit=1`
+    `transactions?select=*&id=eq.${encodeURIComponent(id)}${workspaceFilter(workspaceId)}&limit=1`
   );
 
   return rows[0] ? normalizeTransaction(rows[0]) : null;
 }
 
-async function loadMonthlyClosingById(config: SupabaseConfig, id: string) {
+async function loadMonthlyClosingById(config: SupabaseConfig, id: string, workspaceId?: string) {
   const rows = await supabaseRequest<MonthlyClosingRow[]>(
     config,
-    `monthly_closings?select=*&id=eq.${encodeURIComponent(id)}&limit=1`
+    `monthly_closings?select=*&id=eq.${encodeURIComponent(id)}${workspaceFilter(workspaceId)}&limit=1`
   );
 
   return rows[0] ? normalizeMonthlyClosing(rows[0]) : null;
 }
 
-async function loadMonthlyClosingForDate(config: SupabaseConfig, date: string) {
+async function loadMonthlyClosingForDate(config: SupabaseConfig, date: string, workspaceId?: string) {
   const rows = await supabaseRequest<MonthlyClosingRow[]>(
     config,
-    `monthly_closings?select=*&period_start=lte.${encodeURIComponent(date)}&period_end=gte.${encodeURIComponent(date)}&limit=1`
+    `monthly_closings?select=*&period_start=lte.${encodeURIComponent(date)}&period_end=gte.${encodeURIComponent(date)}${workspaceFilter(workspaceId)}&limit=1`
   );
 
   return rows[0] ? normalizeMonthlyClosing(rows[0]) : null;
 }
 
-async function upsertMonthlyClosing(config: SupabaseConfig, closing: MonthlyClosing) {
+async function upsertMonthlyClosing(config: SupabaseConfig, closing: MonthlyClosing, workspaceId?: string) {
   const rows = await supabaseRequest<MonthlyClosingRow[]>(
     config,
     "monthly_closings?on_conflict=id&select=*",
     {
       method: "POST",
-      body: JSON.stringify(closing),
+      body: JSON.stringify(withWorkspace(closing, workspaceId)),
       headers: {
         Prefer: "resolution=merge-duplicates,return=representation"
       }
@@ -442,15 +453,16 @@ async function assertClosedPeriodReason(
   config: SupabaseConfig,
   previous: Transaction,
   patch: Partial<Transaction>,
-  audit: TransactionAuditOptions
+  audit: TransactionAuditOptions,
+  workspaceId?: string
 ) {
   const sensitiveFields = changedSensitiveFields(patch);
 
   if (!sensitiveFields.length) return;
 
   const [previousClosing, nextClosing] = await Promise.all([
-    loadMonthlyClosingForDate(config, previous.date),
-    typeof patch.date === "string" ? loadMonthlyClosingForDate(config, patch.date) : null
+    loadMonthlyClosingForDate(config, previous.date, workspaceId),
+    typeof patch.date === "string" ? loadMonthlyClosingForDate(config, patch.date, workspaceId) : null
   ]);
   const touchesClosedPeriod =
     previousClosing?.status === "closed" || nextClosing?.status === "closed";
@@ -460,10 +472,10 @@ async function assertClosedPeriodReason(
   }
 }
 
-async function insertTransaction(config: SupabaseConfig, transaction: Transaction) {
+async function insertTransaction(config: SupabaseConfig, transaction: Transaction, workspaceId?: string) {
   const rows = await supabaseRequest<Transaction[]>(config, "transactions?select=*", {
     method: "POST",
-    body: JSON.stringify(transaction),
+    body: JSON.stringify(withWorkspace(transaction, workspaceId)),
     headers: {
       Prefer: "return=representation"
     }
@@ -475,11 +487,12 @@ async function insertTransaction(config: SupabaseConfig, transaction: Transactio
 async function patchTransaction(
   config: SupabaseConfig,
   id: string,
-  patch: Partial<Transaction>
+  patch: Partial<Transaction>,
+  workspaceId?: string
 ) {
   const rows = await supabaseRequest<Transaction[]>(
     config,
-    `transactions?id=eq.${encodeURIComponent(id)}&select=*`,
+    `transactions?id=eq.${encodeURIComponent(id)}${workspaceFilter(workspaceId)}&select=*`,
     {
       method: "PATCH",
       body: JSON.stringify(patch),
@@ -496,10 +509,10 @@ async function patchTransaction(
   return normalizeTransaction(rows[0]);
 }
 
-async function deleteTransactionRow(config: SupabaseConfig, id: string) {
+async function deleteTransactionRow(config: SupabaseConfig, id: string, workspaceId?: string) {
   const rows = await supabaseRequest<Transaction[]>(
     config,
-    `transactions?id=eq.${encodeURIComponent(id)}&select=*`,
+    `transactions?id=eq.${encodeURIComponent(id)}${workspaceFilter(workspaceId)}&select=*`,
     {
       method: "DELETE",
       headers: {
@@ -511,11 +524,11 @@ async function deleteTransactionRow(config: SupabaseConfig, id: string) {
   return rows.map((transaction) => normalizeTransaction(transaction));
 }
 
-async function upsertReceiptRow(config: SupabaseConfig, transaction: Transaction) {
-  await upsertRows(config, "receipts", toReceiptRows([transaction]), "transaction_id");
+async function upsertReceiptRow(config: SupabaseConfig, transaction: Transaction, workspaceId?: string) {
+  await upsertRows(config, "receipts", toReceiptRows([transaction], workspaceId), "transaction_id");
 }
 
-async function insertRequiredAuditLogs(config: SupabaseConfig, auditLogs: AuditLog[]) {
+async function insertRequiredAuditLogs(config: SupabaseConfig, auditLogs: AuditLog[], workspaceId?: string) {
   const normalizedLogs = normalizeAuditLogs(auditLogs);
 
   if (!normalizedLogs.length) {
@@ -524,7 +537,7 @@ async function insertRequiredAuditLogs(config: SupabaseConfig, auditLogs: AuditL
 
   const rows = await supabaseRequest<AuditLog[]>(config, "audit_logs?select=*", {
     method: "POST",
-    body: JSON.stringify(normalizedLogs),
+    body: JSON.stringify(normalizedLogs.map((log) => withWorkspace(log, workspaceId))),
     headers: {
       Prefer: "return=representation"
     }
@@ -549,7 +562,8 @@ function failedWriteMessage(action: string, error: unknown, rollbackError?: unkn
 
 export async function createSupabaseTransaction(
   transaction: Transaction,
-  audit: TransactionCreateAuditOptions = {}
+  audit: TransactionCreateAuditOptions = {},
+  workspaceId?: string
 ): Promise<TransactionWriteResult> {
   const config = getSupabaseConfig();
 
@@ -557,7 +571,7 @@ export async function createSupabaseTransaction(
     throw new Error("Supabase is not configured.");
   }
 
-  const normalized = normalizeTransaction(transaction);
+  const normalized = normalizeTransaction(withWorkspace(transaction, workspaceId));
   let created: Transaction | null = null;
   const auditLogs = [
     createAuditEntry({
@@ -575,14 +589,14 @@ export async function createSupabaseTransaction(
   ];
 
   try {
-    created = await insertTransaction(config, normalized);
-    await upsertReceiptRow(config, created);
-    await insertRequiredAuditLogs(config, auditLogs);
+    created = await insertTransaction(config, normalized, workspaceId);
+    await upsertReceiptRow(config, created, workspaceId);
+    await insertRequiredAuditLogs(config, auditLogs, workspaceId);
   } catch (error) {
     if (!created) throw error;
 
     try {
-      await deleteTransactionRow(config, created.id);
+      await deleteTransactionRow(config, created.id, workspaceId);
     } catch (rollbackError) {
       throw new Error(failedWriteMessage("Transaction create", error, rollbackError));
     }
@@ -596,7 +610,8 @@ export async function createSupabaseTransaction(
 export async function updateSupabaseTransaction(
   id: string,
   patch: Partial<Transaction>,
-  audit: TransactionAuditOptions = {}
+  audit: TransactionAuditOptions = {},
+  workspaceId?: string
 ): Promise<TransactionWriteResult> {
   const config = getSupabaseConfig();
 
@@ -604,13 +619,13 @@ export async function updateSupabaseTransaction(
     throw new Error("Supabase is not configured.");
   }
 
-  const previous = await loadSupabaseTransactionById(config, id);
+  const previous = await loadSupabaseTransactionById(config, id, workspaceId);
 
   if (!previous) {
     throw new Error("Transaction was not found.");
   }
 
-  await assertClosedPeriodReason(config, previous, patch, audit);
+  await assertClosedPeriodReason(config, previous, patch, audit, workspaceId);
 
   const timestamp = new Date().toISOString();
   const preview = normalizeTransaction({
@@ -633,22 +648,22 @@ export async function updateSupabaseTransaction(
     updated = await patchTransaction(config, id, {
       ...patch,
       updated_at: timestamp
-    });
+    }, workspaceId);
     const auditLogs = buildTransactionAuditLogs(previous, updated, {
       ...audit,
       createdAt: timestamp
     });
 
-    await upsertReceiptRow(config, updated);
-    await insertRequiredAuditLogs(config, auditLogs);
+    await upsertReceiptRow(config, updated, workspaceId);
+    await insertRequiredAuditLogs(config, auditLogs, workspaceId);
 
     return { audit_logs: auditLogs, transaction: updated };
   } catch (error) {
     if (!updated) throw error;
 
     try {
-      await patchTransaction(config, id, previous);
-      await upsertReceiptRow(config, previous);
+      await patchTransaction(config, id, previous, workspaceId);
+      await upsertReceiptRow(config, previous, workspaceId);
     } catch (rollbackError) {
       throw new Error(failedWriteMessage("Transaction update", error, rollbackError));
     }
@@ -659,7 +674,8 @@ export async function updateSupabaseTransaction(
 
 export async function deleteSupabaseTransaction(
   id: string,
-  audit: TransactionCreateAuditOptions = {}
+  audit: TransactionCreateAuditOptions = {},
+  workspaceId?: string
 ): Promise<TransactionWriteResult> {
   const config = getSupabaseConfig();
 
@@ -667,7 +683,7 @@ export async function deleteSupabaseTransaction(
     throw new Error("Supabase is not configured.");
   }
 
-  const previous = await loadSupabaseTransactionById(config, id);
+  const previous = await loadSupabaseTransactionById(config, id, workspaceId);
 
   if (!previous) {
     throw new Error("Transaction was not found.");
@@ -677,7 +693,7 @@ export async function deleteSupabaseTransaction(
     date: previous.date,
     money_in: previous.money_in,
     money_out: previous.money_out
-  }, audit);
+  }, audit, workspaceId);
 
   const auditLogs = [
     createAuditEntry({
@@ -694,9 +710,9 @@ export async function deleteSupabaseTransaction(
     })
   ];
 
-  await insertRequiredAuditLogs(config, auditLogs);
+  await insertRequiredAuditLogs(config, auditLogs, workspaceId);
 
-  const deletedRows = await deleteTransactionRow(config, id);
+  const deletedRows = await deleteTransactionRow(config, id, workspaceId);
 
   if (!deletedRows.length) {
     throw new Error("Transaction delete failed after audit log was written.");
@@ -707,7 +723,8 @@ export async function deleteSupabaseTransaction(
 
 export async function importSupabaseTransactions(
   transactions: Transaction[],
-  audit: TransactionCreateAuditOptions = {}
+  audit: TransactionCreateAuditOptions = {},
+  workspaceId?: string
 ): Promise<TransactionWriteResult> {
   const config = getSupabaseConfig();
 
@@ -715,7 +732,7 @@ export async function importSupabaseTransactions(
     throw new Error("Supabase is not configured.");
   }
 
-  const normalized = transactions.map((transaction) => normalizeTransaction(transaction));
+  const normalized = transactions.map((transaction) => normalizeTransaction(withWorkspace(transaction, workspaceId)));
   const timestamp = new Date().toISOString();
   const auditLogs = normalized.map((transaction) =>
     createAuditEntry({
@@ -735,15 +752,15 @@ export async function importSupabaseTransactions(
   let transactionsInserted = false;
 
   try {
-    await insertRows(config, "transactions", normalized);
+    await insertRows(config, "transactions", normalized.map((transaction) => withWorkspace(transaction, workspaceId)));
     transactionsInserted = true;
-    await upsertRows(config, "receipts", toReceiptRows(normalized), "transaction_id");
-    await insertRequiredAuditLogs(config, auditLogs);
+    await upsertRows(config, "receipts", toReceiptRows(normalized, workspaceId), "transaction_id");
+    await insertRequiredAuditLogs(config, auditLogs, workspaceId);
   } catch (error) {
     if (!transactionsInserted) throw error;
 
     try {
-      await Promise.all(normalized.map((transaction) => deleteTransactionRow(config, transaction.id)));
+      await Promise.all(normalized.map((transaction) => deleteTransactionRow(config, transaction.id, workspaceId)));
     } catch (rollbackError) {
       throw new Error(failedWriteMessage("Transaction import", error, rollbackError));
     }
@@ -754,7 +771,7 @@ export async function importSupabaseTransactions(
   return { audit_logs: auditLogs, transactions: normalized };
 }
 
-export async function loadSupabaseBackup(): Promise<LocalBackup> {
+export async function loadSupabaseBackup(workspaceId?: string): Promise<LocalBackup> {
   const config = getSupabaseConfig();
 
   if (!config) {
@@ -762,12 +779,12 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
   }
 
   const [transactionRows, categoryRows, receiptRows, settingsRows, auditLogRows, monthlyClosingRows] = await Promise.all([
-    supabaseRequest<Transaction[]>(config, "transactions?select=*&order=date.desc,created_at.desc"),
-    supabaseRequest<Category[]>(config, "categories?select=*&order=name.asc"),
-    supabaseRequest<ReceiptRow[]>(config, "receipts?select=*"),
-    supabaseRequest<CompanySettingsRow[]>(config, "company_settings?select=*&id=eq.default&limit=1"),
-    supabaseRequest<AuditLogRow[]>(config, "audit_logs?select=*&order=created_at.desc"),
-    supabaseRequest<MonthlyClosingRow[]>(config, "monthly_closings?select=*&order=period_start.desc")
+    supabaseRequest<Transaction[]>(config, `transactions?select=*${workspaceFilter(workspaceId)}&order=date.desc,created_at.desc`),
+    supabaseRequest<Category[]>(config, `categories?select=*${workspaceFilter(workspaceId)}&order=name.asc`),
+    supabaseRequest<ReceiptRow[]>(config, `receipts?select=*${workspaceFilter(workspaceId)}`),
+    supabaseRequest<CompanySettingsRow[]>(config, `company_settings?select=*&id=eq.default${workspaceFilter(workspaceId)}&limit=1`),
+    supabaseRequest<AuditLogRow[]>(config, `audit_logs?select=*${workspaceFilter(workspaceId)}&order=created_at.desc`),
+    supabaseRequest<MonthlyClosingRow[]>(config, `monthly_closings?select=*${workspaceFilter(workspaceId)}&order=period_start.desc`)
   ]);
 
   const receiptByTransaction = new Map(
@@ -796,7 +813,7 @@ export async function loadSupabaseBackup(): Promise<LocalBackup> {
   };
 }
 
-export async function loadSupabaseAuditLogs(): Promise<AuditLog[]> {
+export async function loadSupabaseAuditLogs(workspaceId?: string): Promise<AuditLog[]> {
   const config = getSupabaseConfig();
 
   if (!config) {
@@ -805,13 +822,13 @@ export async function loadSupabaseAuditLogs(): Promise<AuditLog[]> {
 
   const auditLogRows = await supabaseRequest<AuditLogRow[]>(
     config,
-    "audit_logs?select=*&order=created_at.desc"
+    `audit_logs?select=*${workspaceFilter(workspaceId)}&order=created_at.desc`
   );
 
   return normalizeAuditLogs(auditLogRows);
 }
 
-export async function loadSupabaseMonthlyClosings(): Promise<MonthlyClosing[]> {
+export async function loadSupabaseMonthlyClosings(workspaceId?: string): Promise<MonthlyClosing[]> {
   const config = getSupabaseConfig();
 
   if (!config) {
@@ -820,7 +837,7 @@ export async function loadSupabaseMonthlyClosings(): Promise<MonthlyClosing[]> {
 
   const rows = await supabaseRequest<MonthlyClosingRow[]>(
     config,
-    "monthly_closings?select=*&order=period_start.desc"
+    `monthly_closings?select=*${workspaceFilter(workspaceId)}&order=period_start.desc`
   );
 
   return normalizeMonthlyClosings(rows);
@@ -831,7 +848,8 @@ export async function closeSupabaseMonthlyClosing(
   month: number,
   reason: string,
   readinessScore: number,
-  summary: MonthlyClosingSummaryJson
+  summary: MonthlyClosingSummaryJson,
+  workspaceId?: string
 ) {
   const config = getSupabaseConfig();
 
@@ -846,7 +864,7 @@ export async function closeSupabaseMonthlyClosing(
   }
 
   const id = monthlyClosingId(year, month);
-  const existing = await loadMonthlyClosingById(config, id);
+  const existing = await loadMonthlyClosingById(config, id, workspaceId);
   const now = new Date().toISOString();
   const { periodEnd, periodStart } = monthPeriod(year, month);
   const closing = normalizeMonthlyClosing({
@@ -882,8 +900,8 @@ export async function closeSupabaseMonthlyClosing(
     reason: trimmedReason,
     source: "manual"
   });
-  const saved = await upsertMonthlyClosing(config, closing);
-  await insertRequiredAuditLogs(config, [auditLog]);
+  const saved = await upsertMonthlyClosing(config, closing, workspaceId);
+  await insertRequiredAuditLogs(config, [auditLog], workspaceId);
 
   return { audit_logs: [auditLog], closing: saved };
 }
@@ -891,7 +909,8 @@ export async function closeSupabaseMonthlyClosing(
 export async function reopenSupabaseMonthlyClosing(
   year: number,
   month: number,
-  reason: string
+  reason: string,
+  workspaceId?: string
 ) {
   const config = getSupabaseConfig();
 
@@ -906,7 +925,7 @@ export async function reopenSupabaseMonthlyClosing(
   }
 
   const id = monthlyClosingId(year, month);
-  const existing = await loadMonthlyClosingById(config, id);
+  const existing = await loadMonthlyClosingById(config, id, workspaceId);
   const now = new Date().toISOString();
   const { periodEnd, periodStart } = monthPeriod(year, month);
   const closing = normalizeMonthlyClosing({
@@ -935,8 +954,8 @@ export async function reopenSupabaseMonthlyClosing(
     reason: trimmedReason,
     source: "manual"
   });
-  const saved = await upsertMonthlyClosing(config, closing);
-  await insertRequiredAuditLogs(config, [auditLog]);
+  const saved = await upsertMonthlyClosing(config, closing, workspaceId);
+  await insertRequiredAuditLogs(config, [auditLog], workspaceId);
 
   return { audit_logs: [auditLog], closing: saved };
 }
@@ -944,7 +963,8 @@ export async function reopenSupabaseMonthlyClosing(
 export async function updateSupabaseMonthlyClosingSummary(
   year: number,
   month: number,
-  summary: MonthlyClosingSummaryJson
+  summary: MonthlyClosingSummaryJson,
+  workspaceId?: string
 ) {
   const config = getSupabaseConfig();
 
@@ -953,7 +973,7 @@ export async function updateSupabaseMonthlyClosingSummary(
   }
 
   const id = monthlyClosingId(year, month);
-  const existing = await loadMonthlyClosingById(config, id);
+  const existing = await loadMonthlyClosingById(config, id, workspaceId);
 
   if (!existing) {
     throw new Error("Monthly closing record was not found.");
@@ -963,12 +983,12 @@ export async function updateSupabaseMonthlyClosingSummary(
     ...existing,
     summary_json: summary,
     updated_at: new Date().toISOString()
-  });
+  }, workspaceId);
 
   return { audit_logs: [], closing: saved };
 }
 
-export async function appendSupabaseAuditLogs(entries: AuditLog[]) {
+export async function appendSupabaseAuditLogs(entries: AuditLog[], workspaceId?: string) {
   const config = getSupabaseConfig();
 
   if (!config) {
@@ -977,9 +997,9 @@ export async function appendSupabaseAuditLogs(entries: AuditLog[]) {
 
   const normalizedEntries = normalizeAuditLogs(entries);
 
-  await insertIgnoreRows(config, "audit_logs", normalizedEntries, "id");
+  await insertIgnoreRows(config, "audit_logs", normalizedEntries.map((entry) => withWorkspace(entry, workspaceId)), "id");
 
-  return loadSupabaseAuditLogs();
+  return loadSupabaseAuditLogs(workspaceId);
 }
 
 export async function replaceSupabaseBackup(_backup: LocalBackup): Promise<LocalBackup> {

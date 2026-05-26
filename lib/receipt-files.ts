@@ -83,7 +83,7 @@ export function isManagedReceiptPath(value: string) {
   const path = value.trim();
 
   return (
-    path.startsWith("transactions/") &&
+    (path.startsWith("transactions/") || path.startsWith("receipts/")) &&
     path.length <= 512 &&
     !path.includes("..") &&
     /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(path)

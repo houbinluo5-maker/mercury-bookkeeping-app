@@ -1,4 +1,9 @@
-import { isAdminPasswordConfigured, isSafeRedirectPath } from "@/lib/auth";
+import {
+  isAdminPasswordConfigured,
+  isAuthProviderEnabled,
+  isSafeRedirectPath,
+  isSupabaseAuthConfigured
+} from "@/lib/auth";
 import { LoginPanel } from "@/components/login-panel";
 
 type LoginPageProps = {
@@ -18,16 +23,22 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const error = getParam(params, "error");
   const setup = getParam(params, "setup");
   const loggedOut = getParam(params, "logout");
+  const message = getParam(params, "message");
   const isDevelopment = process.env.NODE_ENV !== "production";
 
   return (
     <LoginPanel
       error={error}
+      googleEnabled={isAuthProviderEnabled("google")}
+      githubEnabled={isAuthProviderEnabled("github")}
       isDevelopment={isDevelopment}
       loggedOut={loggedOut}
+      message={message}
+      microsoftEnabled={isAuthProviderEnabled("azure")}
       nextPath={nextPath}
       passwordConfigured={passwordConfigured}
       setup={setup}
+      supabaseAuthConfigured={isSupabaseAuthConfigured()}
     />
   );
 }

@@ -7,13 +7,37 @@ import {
   getExpectedAuthToken,
   isSafeRedirectPath
 } from "@/lib/auth";
+import { setSupabaseSessionCookies } from "@/lib/auth-cookies";
+import { ensureProfileAndWorkspace, signInWithEmail } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const submittedPassword = String(formData.get("password") ?? "");
   const nextPath = String(formData.get("next") ?? "/");
+  const legacy = String(formData.get("legacy") ?? "") === "1";
   const adminPassword = getAdminPassword();
   const loginUrl = new URL("/login", request.url);
+
+  if (email && !legacy) {
+    try {
+      const session = await signInWithEmail(email, submittedPassword);
+      const { workspace } = await ensureProfileAndWorkspace(session.user);
+      const response = NextResponse.redirect(
+        new URL(isSafeRedirectPath(nextPath) ? nextPath : "/", request.url),
+        { status: 303 }
+      );
+
+      setSupabaseSessionCookies(response, session, workspace);
+
+      return response;
+    } catch (error) {
+      loginUrl.searchParams.set("error", "supabase");
+      loginUrl.searchParams.set("message", error instanceof Error ? error.message : "Login failed.");
+      if (isSafeRedirectPath(nextPath)) loginUrl.searchParams.set("next", nextPath);
+      return NextResponse.redirect(loginUrl, { status: 303 });
+    }
+  }
 
   if (!adminPassword) {
     loginUrl.searchParams.set("setup", "missing");

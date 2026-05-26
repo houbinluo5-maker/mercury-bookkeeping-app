@@ -6,8 +6,14 @@ export type AuditEntityType =
   | "settings"
   | "category"
   | "reconciliation";
-export type AuditActor = "admin" | "system";
-export type AuditSource = "manual" | "import" | "system" | "csv_import" | "receipt_upload";
+export type AuditActor = "admin" | "system" | string;
+export type AuditSource =
+  | "manual"
+  | "import"
+  | "system"
+  | "csv_import"
+  | "receipt_upload"
+  | "oauth_signup";
 export type AuditAction =
   | "create"
   | "update"
@@ -29,6 +35,7 @@ export type MonthlyClosingStatus = "open" | "ready_to_close" | "closed" | "reope
 
 export type Transaction = {
   id: string;
+  workspace_id?: string;
   date: string;
   account: string;
   source: string;
@@ -51,6 +58,7 @@ export type TransactionDraft = Omit<Transaction, "id" | "created_at" | "updated_
 
 export type Category = {
   id: string;
+  workspace_id?: string;
   name: string;
   type: CategoryType;
   tax_line: string;
@@ -71,6 +79,9 @@ export type AppSettings = {
 
 export type AuditLog = {
   id: string;
+  workspace_id?: string;
+  actor_user_id?: string;
+  actor_email?: string;
   entity_type: AuditEntityType;
   entity_id: string;
   action: AuditAction;
@@ -101,6 +112,7 @@ export type MonthlyClosingSummaryJson = {
 
 export type MonthlyClosing = {
   id: string;
+  workspace_id?: string;
   year: number;
   month: number;
   period_start: string;
@@ -158,6 +170,35 @@ export type SupabaseHealthCheck = {
   service_role_key: "ok" | "missing" | "error";
   supabase_url: "ok" | "missing";
   transactions: "ok" | "error";
+};
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  full_name: string;
+  avatar_url: string;
+  auth_provider: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Workspace = {
+  id: string;
+  name: string;
+  business_type: string;
+  tax_year: number;
+  default_currency: string;
+  owner_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WorkspaceMember = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: "owner" | "admin" | "bookkeeper" | "viewer";
+  created_at: string;
 };
 
 export type PeriodSummary = {

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   Building2,
@@ -16,6 +17,7 @@ import {
   ReceiptText,
   Settings,
   ShieldCheck,
+  UserCircle,
   Upload,
   WalletCards
 } from "lucide-react";
@@ -60,12 +62,19 @@ const navGroups = [
     labelKey: "systemNav",
     items: [
       { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
+      { href: "/account", labelKey: "accountSettings", icon: UserCircle },
       { href: "/settings", labelKey: "settings", icon: Settings }
     ]
   }
 ];
 
 const navItems = navGroups.flatMap((group) => group.items);
+
+type AccountSummary = {
+  role: string;
+  user: { email: string; avatarUrl?: string } | null;
+  workspace: { name: string; tax_year: number; business_type: string };
+};
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -76,8 +85,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { settings } = useBookkeeping();
   const { t } = useI18n();
+  const [account, setAccount] = useState<AccountSummary | null>(null);
 
-  if (pathname === "/login") {
+  useEffect(() => {
+    if (["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback"].includes(pathname)) return;
+
+    fetch("/api/auth/me")
+      .then(async (response) => {
+        if (response.ok) setAccount((await response.json()) as AccountSummary);
+      })
+      .catch(() => undefined);
+  }, [pathname]);
+
+  if (["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback"].includes(pathname)) {
     return <main className="min-h-screen bg-paper">{children}</main>;
   }
 
@@ -95,11 +115,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           </div>
           <div className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm">
-            <p className="truncate text-sm font-semibold text-ink">{settings.company_name}</p>
+            <p className="truncate text-sm font-semibold text-ink">{account?.workspace.name ?? settings.company_name}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span>{settings.tax_year}</span>
+              <span>{account?.workspace.tax_year ?? settings.tax_year}</span>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
-              <span className="truncate">{settings.business_type_tax_notes || settings.entity_type}</span>
+              <span className="truncate">{account?.workspace.business_type ?? settings.business_type_tax_notes ?? settings.entity_type}</span>
             </div>
             <div className="mt-3 flex items-center gap-2 text-xs font-medium text-mint">
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
@@ -140,6 +160,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <form action="/api/auth/logout" className="border-t border-slate-200 p-3" method="post">
+            <div className="mb-3 rounded-lg border border-line bg-white px-3 py-3 shadow-sm">
+              <p className="truncate text-xs font-semibold text-ink">{account?.user?.email ?? "Legacy admin"}</p>
+              <p className="mt-1 text-xs capitalize text-slate-500">{account?.role ?? "owner"}</p>
+            </div>
             <button
               className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-ink"
               type="submit"

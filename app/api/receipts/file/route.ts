@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isManagedReceiptPath, RECEIPT_BUCKET_NAME } from "@/lib/receipt-files";
-import { isAuthenticatedRequest } from "@/lib/server-auth";
+import { getAuthenticatedContext } from "@/lib/server-auth";
 import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase-server";
 
 function encodeStoragePath(path: string) {
@@ -12,7 +12,8 @@ function fileNameFromPath(path: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await isAuthenticatedRequest(request))) {
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,6 +28,10 @@ export async function GET(request: NextRequest) {
 
   if (!isManagedReceiptPath(path)) {
     return NextResponse.json({ error: "Receipt path is invalid." }, { status: 400 });
+  }
+
+  if (path.startsWith("receipts/") && !path.startsWith(`receipts/${auth.workspace.id}/`)) {
+    return NextResponse.json({ error: "Receipt path does not belong to this workspace." }, { status: 403 });
   }
 
   const config = getSupabaseConfig();
