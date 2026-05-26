@@ -18,6 +18,7 @@ import {
   Settings,
   ShieldCheck,
   UserCircle,
+  UsersRound,
   Upload,
   WalletCards
 } from "lucide-react";
@@ -65,6 +66,7 @@ const navGroups = [
     items: [
       { href: "/accounts", labelKey: "chartOfAccounts", icon: Building2 },
       { href: "/account", labelKey: "accountSettings", icon: UserCircle },
+      { href: "/team", labelKey: "teamMembers", icon: UsersRound },
       { href: "/settings", labelKey: "settings", icon: Settings }
     ]
   }
@@ -83,6 +85,16 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isShelllessPath(pathname: string) {
+  return ["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback"].includes(pathname)
+    || pathname.startsWith("/invite/");
+}
+
+function roleLabel(t: (key: string) => string, role: string) {
+  const label = t(`role.${role}`);
+  return label === `role.${role}` ? role : label;
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { settings } = useBookkeeping();
@@ -90,7 +102,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState<AccountSummary | null>(null);
 
   useEffect(() => {
-    if (["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback"].includes(pathname)) return;
+    if (isShelllessPath(pathname)) return;
 
     fetch("/api/auth/me")
       .then(async (response) => {
@@ -99,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [pathname]);
 
-  if (["/login", "/register", "/forgot-password", "/reset-password", "/auth/callback"].includes(pathname)) {
+  if (isShelllessPath(pathname)) {
     return <main className="min-h-screen bg-paper">{children}</main>;
   }
 
@@ -157,7 +169,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <form action="/api/auth/logout" className="border-t border-slate-200 p-3" method="post">
             <div className="mb-3 rounded-lg border border-line bg-white px-3 py-3 shadow-sm">
               <p className="truncate text-xs font-semibold text-ink">{account?.user?.email ?? "Legacy admin"}</p>
-              <p className="mt-1 text-xs capitalize text-slate-500">{account?.role ?? "owner"}</p>
+              <p className="mt-1 text-xs text-slate-500">{roleLabel(t, account?.role ?? "owner")}</p>
             </div>
             <button
               className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-ink"

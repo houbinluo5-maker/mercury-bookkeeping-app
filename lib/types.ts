@@ -31,7 +31,16 @@ export type AuditAction =
   | "resolve_review"
   | "dismiss_duplicate"
   | "note_change"
-  | "workspace_claimed";
+  | "workspace_claimed"
+  | "member_invited"
+  | "invitation_accepted"
+  | "invitation_revoked"
+  | "member_removed"
+  | "member_role_changed";
+
+export type WorkspaceRole = "owner" | "admin" | "viewer" | "cpa" | "bookkeeper";
+export type WorkspaceMemberStatus = "active" | "invited" | "revoked";
+export type WorkspaceInvitationStatus = "invited" | "accepted" | "revoked" | "expired";
 
 export type MonthlyClosingStatus = "open" | "ready_to_close" | "closed" | "reopened";
 
@@ -198,9 +207,33 @@ export type Workspace = {
 export type WorkspaceMember = {
   id: string;
   workspace_id: string;
-  user_id: string;
-  role: "owner" | "admin" | "bookkeeper" | "viewer";
+  user_id: string | null;
+  email?: string;
+  normalized_email?: string;
+  role: WorkspaceRole;
+  status?: WorkspaceMemberStatus;
+  invited_by?: string | null;
+  invited_at?: string | null;
+  accepted_at?: string | null;
   created_at: string;
+  updated_at?: string;
+};
+
+export type WorkspaceInvitation = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  normalized_email: string;
+  role: Exclude<WorkspaceRole, "owner" | "bookkeeper">;
+  token: string;
+  status: WorkspaceInvitationStatus;
+  expires_at: string;
+  invited_by: string | null;
+  accepted_by: string | null;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type PeriodSummary = {

@@ -39,6 +39,11 @@ type AccountState = {
   };
 };
 
+function roleLabel(t: (key: string) => string, role: string) {
+  const label = t(`role.${role}`);
+  return label === `role.${role}` ? role : label;
+}
+
 export default function AccountPage() {
   const [account, setAccount] = useState<AccountState | null>(null);
   const [claimError, setClaimError] = useState("");
@@ -143,7 +148,7 @@ export default function AccountPage() {
               <Badge tone={account?.ownsWorkspace ? "green" : "blue"}>
                 {account?.ownsWorkspace ? t("workspaceOwnerStatus") : t("workspaceMemberStatus")}
               </Badge>
-              <span className="text-sm font-semibold capitalize text-ink">{account?.role ?? "owner"}</span>
+              <span className="text-sm font-semibold text-ink">{roleLabel(t, account?.role ?? "owner")}</span>
             </dd>
           </div>
           <div className="rounded-lg border border-line bg-slate-50/70 p-4">
