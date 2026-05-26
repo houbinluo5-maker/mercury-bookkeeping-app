@@ -193,6 +193,30 @@ export async function getUserFromAccessToken(accessToken: string) {
   return supabaseAuthRequest<SupabaseAuthUser>("user", { method: "GET" }, accessToken);
 }
 
+export async function exchangeOAuthCodeForSession(code: string, codeVerifier: string) {
+  const session = await supabaseAuthRequest<Partial<SupabaseAuthSession>>("token?grant_type=pkce", {
+    body: JSON.stringify({
+      auth_code: code,
+      code_verifier: codeVerifier
+    }),
+    method: "POST"
+  });
+
+  if (!session.access_token) {
+    throw new Error("Supabase did not return an access token for this OAuth code.");
+  }
+
+  const user = session.user ?? await getUserFromAccessToken(session.access_token);
+
+  return {
+    access_token: session.access_token,
+    expires_in: session.expires_in,
+    refresh_token: session.refresh_token,
+    token_type: session.token_type,
+    user
+  };
+}
+
 export async function hasOwnerWorkspace() {
   const rows = await adminRestRequest<WorkspaceMember[]>(
     "workspace_members?select=*&role=eq.owner&status=eq.active&limit=1"

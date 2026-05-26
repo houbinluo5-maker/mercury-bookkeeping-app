@@ -3,6 +3,7 @@ export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 12;
 export const SUPABASE_ACCESS_TOKEN_COOKIE = "mercury_sb_access_token";
 export const SUPABASE_REFRESH_TOKEN_COOKIE = "mercury_sb_refresh_token";
 export const ACTIVE_WORKSPACE_COOKIE = "mercury_active_workspace";
+export const SUPABASE_OAUTH_CODE_VERIFIER_COOKIE = "mercury_sb_oauth_code_verifier";
 export const SUPABASE_AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 const AUTH_TOKEN_PREFIX = "mercury-bookkeeping-admin:";
