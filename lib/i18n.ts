@@ -24,6 +24,9 @@ const translations: Record<Language, Record<string, string>> = {
     applyRules: "Apply rules",
     backupJson: "Backup JSON",
     bookkeepingMethod: "Bookkeeping Method",
+    brandSubtitle: "Executive Finance OS",
+    brandWorkspaceSummary:
+      "Revenue, receipts, reconciliation, and month-end close in one secure workspace.",
     businessType: "Business Type",
     businessTypeTaxNotes: "Business Type / Tax Notes",
     cancel: "Cancel",
@@ -1198,6 +1201,8 @@ const authZhOverrides: Record<string, string> = {
   authSupabaseConfigMissing: "此部署尚未配置 Supabase Auth。",
   authTrustNote: "服务角色密钥仅保留在服务端。浏览器登录使用提供商会话和按工作区隔离的 API。",
   backToLogin: "返回登录",
+  brandSubtitle: "财务运营系统",
+  brandWorkspaceSummary: "收入、收据、对账与月结，在一个安全工作区内完成。",
   confirmPassword: "确认密码",
   continueWithGithub: "使用 GitHub 继续",
   continueWithGoogle: "使用 Google 继续",

@@ -1,5 +1,10 @@
+import type { Metadata } from "next";
 import { RegisterPanel } from "@/components/auth-panels";
 import { isAuthProviderEnabled, isSafeRedirectPath } from "@/lib/auth";
+
+export const metadata: Metadata = {
+  title: "Create account"
+};
 
 type PageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
