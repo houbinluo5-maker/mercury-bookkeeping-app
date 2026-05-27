@@ -56,10 +56,10 @@ export function OAuthButton({
   icon: React.ReactNode;
 }) {
   return (
-    <Link className={secondaryAuthButtonClass} href={href}>
+    <a className={secondaryAuthButtonClass} href={href}>
       {icon}
       <span>{children}</span>
-    </Link>
+    </a>
   );
 }
 

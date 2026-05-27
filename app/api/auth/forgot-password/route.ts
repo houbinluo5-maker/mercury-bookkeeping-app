@@ -1,10 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { canonicalUrl, createCanonicalHostRedirect } from "@/lib/canonical-host";
 import { requestPasswordReset } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const pageUrl = new URL("/forgot-password", request.url);
+  const pageUrl = canonicalUrl("/forgot-password", request);
 
   if (!email) {
     pageUrl.searchParams.set("error", "missing");
@@ -12,7 +19,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await requestPasswordReset(email, new URL("/reset-password", request.url).toString());
+    await requestPasswordReset(email, canonicalUrl("/reset-password", request).toString());
     pageUrl.searchParams.set("sent", "1");
   } catch (error) {
     pageUrl.searchParams.set("error", "supabase");

@@ -7,7 +7,7 @@ import {
   isAuthProviderEnabled,
   isSafeRedirectPath
 } from "@/lib/auth";
-import { canonicalUrl } from "@/lib/canonical-host";
+import { canonicalUrl, createCanonicalHostRedirect } from "@/lib/canonical-host";
 
 const providerMap = {
   azure: "azure",
@@ -29,6 +29,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ provider: string }> }
 ) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   const { provider } = await params;
 
   if (!(provider in providerMap)) {

@@ -39,9 +39,13 @@ export type AuthWorkspaceContext = {
 };
 
 type SupabaseErrorBody = {
-  error?: string;
-  error_description?: string;
-  message?: string;
+  code?: unknown;
+  error?: unknown;
+  error_code?: unknown;
+  error_description?: unknown;
+  message?: unknown;
+  msg?: unknown;
+  [key: string]: unknown;
 };
 
 const LEGACY_WORKSPACE_ID = "legacy-workspace";
@@ -87,13 +91,82 @@ async function parseResponse(response: Response) {
   }
 }
 
-function describeAuthError(status: number, body: unknown) {
-  if (typeof body === "object" && body !== null) {
-    const errorBody = body as SupabaseErrorBody;
-    return errorBody.error_description || errorBody.message || errorBody.error || `Supabase Auth failed with ${status}.`;
+const sensitiveErrorKeyPattern =
+  /(access[_-]?token|refresh[_-]?token|code[_-]?verifier|authorization|api[_-]?key|apikey|service[_-]?role|secret|cookie|password|token|client[_-]?secret)/i;
+
+function scrubSensitiveText(value: string) {
+  return value
+    .replace(
+      /\b(access[_-]?token|refresh[_-]?token|code[_-]?verifier|client[_-]?secret|api[_-]?key|apikey|authorization|cookie|password)=([^&\s]+)/gi,
+      "$1=[redacted]"
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/[\r\n]+/g, " ")
+    .trim();
+}
+
+function safeErrorText(value: unknown) {
+  if (!["boolean", "number", "string"].includes(typeof value)) return "";
+
+  return scrubSensitiveText(String(value)).slice(0, 500);
+}
+
+function safeErrorCode(value: unknown) {
+  const text = safeErrorText(value);
+
+  return /^[A-Za-z0-9_.:-]{1,80}$/.test(text) ? text : "";
+}
+
+function sanitizeErrorPreview(value: unknown, depth = 0): unknown {
+  if (depth > 3) return "[truncated]";
+
+  if (Array.isArray(value)) {
+    return value.slice(0, 10).map((item) => sanitizeErrorPreview(item, depth + 1));
   }
 
-  return typeof body === "string" && body ? body : `Supabase Auth failed with ${status}.`;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
+        key,
+        sensitiveErrorKeyPattern.test(key) || key.toLowerCase() === "code"
+          ? "[redacted]"
+          : sanitizeErrorPreview(entryValue, depth + 1)
+      ])
+    );
+  }
+
+  if (typeof value === "string") {
+    return scrubSensitiveText(value).slice(0, 200);
+  }
+
+  return value;
+}
+
+function describeAuthError(status: number, body: unknown) {
+  const fallback = `Supabase Auth failed with ${status}.`;
+
+  if (typeof body === "object" && body !== null) {
+    const errorBody = body as SupabaseErrorBody;
+    const details = [
+      safeErrorText(errorBody.error_description),
+      safeErrorText(errorBody.msg),
+      safeErrorText(errorBody.message),
+      safeErrorText(errorBody.error),
+      safeErrorCode(errorBody.error_code) ? `error_code: ${safeErrorCode(errorBody.error_code)}` : "",
+      safeErrorCode(errorBody.code) ? `code: ${safeErrorCode(errorBody.code)}` : ""
+    ].filter(Boolean);
+
+    if (details.length) {
+      return `${fallback} ${Array.from(new Set(details)).join(" ")}`;
+    }
+
+    const preview = JSON.stringify(sanitizeErrorPreview(body));
+    return preview ? `${fallback} ${preview.slice(0, 500)}` : fallback;
+  }
+
+  const text = safeErrorText(body);
+
+  return text ? `${fallback} ${text}` : fallback;
 }
 
 export function normalizeIdentityEmail(email: string | null | undefined) {
