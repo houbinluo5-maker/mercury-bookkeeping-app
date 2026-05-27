@@ -27,7 +27,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const nextPath = isSafeRedirectPath(nextParam) ? nextParam : "/";
   const error = getParam(params, "error");
   const setup = getParam(params, "setup");
-  const loggedOut = getParam(params, "logout");
+  const loggedOut = getParam(params, "logged_out") ?? getParam(params, "logout");
   const message = getParam(params, "message");
   const isDevelopment = process.env.NODE_ENV !== "production";
 

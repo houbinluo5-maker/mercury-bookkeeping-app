@@ -166,19 +166,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             ))}
           </nav>
-          <form action="/api/auth/logout" className="border-t border-slate-200 p-3" method="post">
+          <div className="border-t border-slate-200 p-3">
             <div className="mb-3 rounded-lg border border-line bg-white px-3 py-3 shadow-sm">
               <p className="truncate text-xs font-semibold text-ink">{account?.user?.email ?? "Legacy admin"}</p>
               <p className="mt-1 text-xs text-slate-500">{roleLabel(t, account?.role ?? "owner")}</p>
             </div>
-            <button
+            <a
               className="flex h-10 w-full items-center gap-3 rounded-md px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-ink"
-              type="submit"
+              href="/logout"
             >
               <LogOut aria-hidden="true" className="h-4 w-4" />
               <span>{t("logout")}</span>
-            </button>
-          </form>
+            </a>
+          </div>
         </div>
       </aside>
 
@@ -215,17 +215,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-            <form action="/api/auth/logout" method="post">
-              <button
-                aria-label={t("logout")}
-                className="flex h-10 min-w-10 items-center justify-center rounded-md border border-line bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50"
-                title={t("logout")}
-                type="submit"
-              >
-                <LogOut aria-hidden="true" className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">{t("logout")}</span>
-              </button>
-            </form>
+            <a
+              aria-label={t("logout")}
+              className="flex h-10 min-w-10 items-center justify-center rounded-md border border-line bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50"
+              href="/logout"
+              title={t("logout")}
+            >
+              <LogOut aria-hidden="true" className="h-4 w-4" />
+              <span className="ml-2 hidden sm:inline">{t("logout")}</span>
+            </a>
           </div>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
