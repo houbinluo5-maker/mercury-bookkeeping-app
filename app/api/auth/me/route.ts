@@ -3,6 +3,7 @@ import { permissionsForRole } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   getLegacyWorkspaceClaimStatus,
+  listActiveWorkspaceMembershipsForUser,
   normalizeIdentityEmail
 } from "@/lib/supabase-auth-server";
 
@@ -16,6 +17,43 @@ export async function GET(request: NextRequest) {
   const legacyWorkspaceClaim = context.user
     ? await getLegacyWorkspaceClaimStatus(context.user).catch(() => null)
     : null;
+  const workspaceMemberships = context.user
+    ? await listActiveWorkspaceMembershipsForUser(context.user).catch(() => [])
+    : [];
+  const workspaceOptions = workspaceMemberships.map(({ membership, workspace }) => ({
+    business_type: workspace.business_type,
+    default_currency: workspace.default_currency,
+    id: workspace.id,
+    is_active: workspace.id === context.workspace.id,
+    membership_id: membership.id,
+    name: workspace.name,
+    role: membership.role,
+    status: membership.status ?? "active",
+    tax_year: workspace.tax_year
+  }));
+  const hasCurrentWorkspaceOption = workspaceOptions.some((workspace) => workspace.id === context.workspace.id);
+  const safeWorkspaceOptions = (
+    hasCurrentWorkspaceOption
+      ? workspaceOptions
+      : [
+          {
+            business_type: context.workspace.business_type,
+            default_currency: context.workspace.default_currency,
+            id: context.workspace.id,
+            is_active: true,
+            membership_id: context.membership?.id ?? "legacy-admin-member",
+            name: context.workspace.name,
+            role: context.membership?.role ?? "owner",
+            status: context.membership?.status ?? "active",
+            tax_year: context.workspace.tax_year
+          },
+          ...workspaceOptions
+        ]
+  ).sort((left, right) => {
+    if (left.is_active) return -1;
+    if (right.is_active) return 1;
+    return left.name.localeCompare(right.name);
+  });
   const normalizedEmail = normalizeIdentityEmail(context.user?.email);
   const authProvider =
     context.user?.user_metadata?.provider ||
@@ -41,6 +79,7 @@ export async function GET(request: NextRequest) {
         }
       : null,
     workspace: context.workspace,
+    workspaces: safeWorkspaceOptions,
     permissions: permissionsForRole(context.membership),
     role: context.membership?.role ?? "owner"
   });

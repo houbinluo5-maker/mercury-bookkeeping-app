@@ -77,7 +77,16 @@ const navItems = navGroups.flatMap((group) => group.items);
 type AccountSummary = {
   role: string;
   user: { email: string; avatarUrl?: string } | null;
-  workspace: { name: string; tax_year: number; business_type: string };
+  workspace: { id: string; name: string; tax_year: number; business_type: string };
+  workspaces?: Array<{
+    business_type: string;
+    id: string;
+    is_active: boolean;
+    name: string;
+    role: string;
+    status: string;
+    tax_year: number;
+  }>;
 };
 
 function isActive(pathname: string, href: string) {
@@ -100,6 +109,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { permissions, settings } = useBookkeeping();
   const { t } = useI18n();
   const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [switchError, setSwitchError] = useState("");
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState("");
 
   useEffect(() => {
     if (isShelllessPath(pathname)) return;
@@ -111,6 +122,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => undefined);
   }, [pathname]);
 
+  async function switchWorkspace(workspaceId: string) {
+    if (!workspaceId || workspaceId === account?.workspace.id) return;
+
+    setSwitchError("");
+    setSwitchingWorkspaceId(workspaceId);
+
+    try {
+      const response = await fetch("/api/workspaces/switch", {
+        body: JSON.stringify({ workspaceId }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const body = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(body.error || t("workspaceSwitchError"));
+      }
+
+      window.location.reload();
+    } catch (error) {
+      setSwitchError(error instanceof Error ? error.message : t("workspaceSwitchError"));
+      setSwitchingWorkspaceId("");
+    }
+  }
+
   if (isShelllessPath(pathname)) {
     return <main className="min-h-screen bg-paper">{children}</main>;
   }
@@ -121,17 +157,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="border-b border-slate-200 px-5 py-5">
           <BrandLogo size="md" subtitle={t("brandSubtitle")} />
           <div className="mt-4 rounded-lg border border-marine/10 bg-white/95 px-3 py-3 shadow-sm">
-            <p className="truncate text-sm font-semibold text-ink">{account?.workspace.name ?? settings.company_name}</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="min-w-0 truncate text-sm font-semibold text-ink">
+                {account?.workspace.name ?? settings.company_name}
+              </p>
+              <span className="shrink-0 rounded-full bg-marine/10 px-2 py-0.5 text-[0.65rem] font-semibold text-marine">
+                {roleLabel(t, account?.role ?? "owner")}
+              </span>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span>{account?.workspace.tax_year ?? settings.tax_year}</span>
               <span className="h-1 w-1 rounded-full bg-slate-300" />
               <span className="truncate">{account?.workspace.business_type ?? settings.business_type_tax_notes ?? settings.entity_type}</span>
             </div>
+            {account?.workspaces?.length && account.workspaces.length > 1 ? (
+              <label className="mt-3 block space-y-1">
+                <span className="form-label">{t("switchWorkspace")}</span>
+                <select
+                  className="form-input h-9 text-xs"
+                  disabled={Boolean(switchingWorkspaceId)}
+                  onChange={(event) => void switchWorkspace(event.target.value)}
+                  value={account.workspace.id}
+                >
+                  {account.workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name} - {roleLabel(t, workspace.role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <div className="mt-3 flex items-center gap-2 text-xs font-medium text-mint">
               <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
               <span>{t("cpaReadyWorkspace")}</span>
             </div>
             <p className="mt-2 text-xs leading-5 text-slate-500">{t("brandWorkspaceSummary")}</p>
+            {switchError ? <p className="mt-2 text-xs font-medium text-red-700">{switchError}</p> : null}
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col justify-between">
