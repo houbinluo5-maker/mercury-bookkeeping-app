@@ -66,6 +66,11 @@ export type LegacyWorkspaceClaimStatus = {
   workspace: Workspace | null;
 };
 
+export type ActiveWorkspaceMembership = {
+  membership: WorkspaceMember;
+  workspace: Workspace;
+};
+
 function normalizeUrl(value: string) {
   return value.replace(/\/+$/, "");
 }
@@ -352,6 +357,41 @@ async function loadMembershipsForUser(userId: string) {
   );
 }
 
+function membershipIsActive(membership: WorkspaceMember) {
+  return (membership.status ?? "active") === "active";
+}
+
+export async function listActiveWorkspaceMembershipsForUser(
+  user: SupabaseAuthUser
+): Promise<ActiveWorkspaceMembership[]> {
+  const memberships = await loadMembershipsForUser(user.id);
+  const activeMemberships = memberships.filter(membershipIsActive);
+  const rows: ActiveWorkspaceMembership[] = [];
+
+  for (const membership of activeMemberships) {
+    const workspace = await loadWorkspaceById(membership.workspace_id);
+    if (workspace) rows.push({ membership, workspace });
+  }
+
+  return rows;
+}
+
+export async function getActiveWorkspaceMembershipForUser(
+  user: SupabaseAuthUser,
+  workspaceId: string
+): Promise<ActiveWorkspaceMembership | null> {
+  const memberships = await loadMembershipsForUser(user.id);
+  const membership = memberships.find(
+    (item) => item.workspace_id === workspaceId && membershipIsActive(item)
+  );
+
+  if (!membership) return null;
+
+  const workspace = await loadWorkspaceById(membership.workspace_id);
+
+  return workspace ? { membership, workspace } : null;
+}
+
 async function resolveMembershipWorkspace(
   memberships: WorkspaceMember[],
   preferredWorkspaceId?: string
@@ -363,7 +403,7 @@ async function resolveMembershipWorkspace(
   });
 
   for (const membership of orderedMemberships) {
-    if (membership.status && membership.status !== "active") continue;
+    if (!membershipIsActive(membership)) continue;
 
     const workspace = await loadWorkspaceById(membership.workspace_id);
     if (workspace) return { membership, workspace };

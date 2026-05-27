@@ -37,6 +37,16 @@ type AccountState = {
     name: string;
     tax_year: number;
   };
+  workspaces: Array<{
+    business_type: string;
+    id: string;
+    is_active: boolean;
+    membership_id: string;
+    name: string;
+    role: string;
+    status: string;
+    tax_year: number;
+  }>;
 };
 
 function roleLabel(t: (key: string) => string, role: string) {
@@ -49,6 +59,8 @@ export default function AccountPage() {
   const [claimError, setClaimError] = useState("");
   const [claimSuccess, setClaimSuccess] = useState("");
   const [claiming, setClaiming] = useState(false);
+  const [switchError, setSwitchError] = useState("");
+  const [switchingWorkspaceId, setSwitchingWorkspaceId] = useState("");
   const { t } = useI18n();
 
   async function fetchAccountState() {
@@ -100,6 +112,31 @@ export default function AccountPage() {
     }
   }
 
+  async function switchWorkspace(workspaceId: string) {
+    if (!workspaceId || workspaceId === account?.workspace.id) return;
+
+    setSwitchError("");
+    setSwitchingWorkspaceId(workspaceId);
+
+    try {
+      const response = await fetch("/api/workspaces/switch", {
+        body: JSON.stringify({ workspaceId }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST"
+      });
+      const body = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(body.error || t("workspaceSwitchError"));
+      }
+
+      window.location.reload();
+    } catch (error) {
+      setSwitchError(error instanceof Error ? error.message : t("workspaceSwitchError"));
+      setSwitchingWorkspaceId("");
+    }
+  }
+
   const claim = account?.legacyWorkspaceClaim;
   const showClaimCard = account?.authType === "supabase" && claim?.hasData && !claim.claimedByCurrentUser;
 
@@ -120,6 +157,12 @@ export default function AccountPage() {
       {claimError ? (
         <AlertBanner tone="danger">
           <p className="text-sm font-semibold">{claimError}</p>
+        </AlertBanner>
+      ) : null}
+
+      {switchError ? (
+        <AlertBanner tone="danger">
+          <p className="text-sm font-semibold">{switchError}</p>
         </AlertBanner>
       ) : null}
 
@@ -160,6 +203,71 @@ export default function AccountPage() {
             <dd className="mt-1 text-sm font-semibold text-ink">{account?.normalizedEmail || "n/a"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="surface-card overflow-hidden">
+        <div className="border-b border-line p-5">
+          <SectionHeader
+            description={t("allWorkspacesDescription")}
+            title={t("allWorkspaces")}
+          />
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">{t("workspaceName")}</th>
+                <th className="px-4 py-3">{t("businessType")}</th>
+                <th className="px-4 py-3">{t("role")}</th>
+                <th className="px-4 py-3">{t("status")}</th>
+                <th className="px-4 py-3 text-right">{t("action")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {(account?.workspaces ?? []).map((workspace) => (
+                <tr className="hover:bg-slate-50/70" key={workspace.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-semibold text-ink">{workspace.name}</p>
+                    <p className="mt-1 break-all text-xs text-slate-500">{workspace.id}</p>
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">{workspace.business_type}</td>
+                  <td className="px-4 py-3">
+                    <Badge tone={workspace.role === "owner" ? "green" : "blue"}>
+                      {roleLabel(t, workspace.role)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={workspace.is_active ? "green" : "neutral"}>
+                      {workspace.is_active ? t("currentWorkspace") : workspace.status}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {workspace.is_active ? (
+                      <span className="text-xs font-medium text-slate-500">{t("activeWorkspace")}</span>
+                    ) : (
+                      <Button
+                        disabled={Boolean(switchingWorkspaceId)}
+                        onClick={() => void switchWorkspace(workspace.id)}
+                      >
+                        {switchingWorkspaceId === workspace.id ? (
+                          <Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />
+                        ) : null}
+                        {t("switchWorkspace")}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {account && !account.workspaces.length ? (
+                <tr>
+                  <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+                    {t("noAccessibleWorkspaces")}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {showClaimCard ? (
