@@ -4,7 +4,7 @@ import {
   SUPABASE_OAUTH_CODE_VERIFIER_COOKIE,
   isSafeRedirectPath
 } from "@/lib/auth";
-import { canonicalUrl } from "@/lib/canonical-host";
+import { canonicalUrl, createCanonicalHostRedirect } from "@/lib/canonical-host";
 import {
   ensureProfileAndWorkspace,
   exchangeOAuthCodeForSession
@@ -78,6 +78,12 @@ async function exchangeCode(request: NextRequest, code: string, nextPath: string
 }
 
 export async function GET(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   const nextPath = safeNextPath(request.nextUrl.searchParams.get("next"));
   const code = request.nextUrl.searchParams.get("code");
 
@@ -101,6 +107,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   try {
     const body = (await request.json()) as { code?: string; next?: string };
     const nextPath = safeNextPath(body.next);

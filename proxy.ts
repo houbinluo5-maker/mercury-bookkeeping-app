@@ -6,7 +6,6 @@ import {
   isAdminPasswordConfigured
 } from "@/lib/auth";
 import { createCanonicalHostRedirect, canonicalUrl } from "@/lib/canonical-host";
-import { createLogoutResponse } from "@/lib/logout-response";
 
 const protectedPathPrefixes = [
   "/account",
@@ -33,10 +32,6 @@ export async function proxy(request: NextRequest) {
   const canonicalRedirect = createCanonicalHostRedirect(request);
 
   if (canonicalRedirect) {
-    if (pathname === "/logout" || pathname === "/api/auth/logout") {
-      return createLogoutResponse(request);
-    }
-
     return canonicalRedirect;
   }
 

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isSafeRedirectPath } from "@/lib/auth";
 import { setSupabaseSessionCookies } from "@/lib/auth-cookies";
+import { canonicalUrl, createCanonicalHostRedirect } from "@/lib/canonical-host";
 import {
   canCreatePublicAccount,
   ensureProfileAndWorkspace,
@@ -8,6 +9,12 @@ import {
 } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   const formData = await request.formData();
   const fullName = String(formData.get("fullName") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -15,7 +22,7 @@ export async function POST(request: NextRequest) {
   const confirmPassword = String(formData.get("confirmPassword") ?? "");
   const workspaceName = String(formData.get("workspaceName") ?? "").trim();
   const nextPath = String(formData.get("next") ?? "/");
-  const registerUrl = new URL("/register", request.url);
+  const registerUrl = canonicalUrl("/register", request);
 
   if (!email || !password || !fullName || !workspaceName) {
     registerUrl.searchParams.set("error", "missing");
@@ -46,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const { workspace } = await ensureProfileAndWorkspace(session.user, workspaceName);
     const response = NextResponse.redirect(
-      new URL(isSafeRedirectPath(nextPath) ? nextPath : "/", request.url),
+      canonicalUrl(isSafeRedirectPath(nextPath) ? nextPath : "/", request),
       { status: 303 }
     );
 

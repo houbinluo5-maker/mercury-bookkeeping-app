@@ -8,10 +8,16 @@ import {
   isSafeRedirectPath
 } from "@/lib/auth";
 import { setSupabaseSessionCookies } from "@/lib/auth-cookies";
-import { canonicalUrl } from "@/lib/canonical-host";
+import { canonicalUrl, createCanonicalHostRedirect } from "@/lib/canonical-host";
 import { ensureProfileAndWorkspace, signInWithEmail } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const submittedPassword = String(formData.get("password") ?? "");

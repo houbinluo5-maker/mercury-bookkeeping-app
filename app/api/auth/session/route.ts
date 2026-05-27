@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { setSupabaseSessionCookies } from "@/lib/auth-cookies";
+import { createCanonicalHostRedirect } from "@/lib/canonical-host";
 import {
   ensureProfileAndWorkspace,
   getUserFromAccessToken,
@@ -7,6 +8,12 @@ import {
 } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    return canonicalRedirect;
+  }
+
   try {
     const body = (await request.json()) as Partial<SupabaseAuthSession>;
 
