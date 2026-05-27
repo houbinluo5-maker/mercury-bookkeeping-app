@@ -4,6 +4,7 @@ import {
   AUTH_COOKIE_NAME,
   SUPABASE_ACCESS_TOKEN_COOKIE,
   SUPABASE_AUTH_COOKIE_MAX_AGE_SECONDS,
+  SUPABASE_OAUTH_CODE_VERIFIER_COOKIE,
   SUPABASE_REFRESH_TOKEN_COOKIE
 } from "@/lib/auth";
 import type { SupabaseAuthSession } from "@/lib/supabase-auth-server";
@@ -70,4 +71,16 @@ export function clearAuthCookies(response: NextResponse) {
       secure
     });
   }
+}
+
+export function clearSupabaseOAuthVerifierCookie(response: NextResponse) {
+  response.cookies.set({
+    name: SUPABASE_OAUTH_CODE_VERIFIER_COOKIE,
+    value: "",
+    expires: new Date(0),
+    httpOnly: true,
+    path: "/",
+    sameSite: "lax",
+    secure
+  });
 }
