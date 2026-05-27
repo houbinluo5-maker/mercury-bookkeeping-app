@@ -5,6 +5,7 @@ import { CheckCircle2, FileUp, RefreshCw, Upload } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -32,6 +33,7 @@ export default function MercuryImportPage() {
   const {
     categories,
     importTransactions,
+    permissions,
     settings,
     storageStatus,
     transactions
@@ -63,6 +65,8 @@ export default function MercuryImportPage() {
   );
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    if (!permissions.canEditTransactions) return;
+
     const file = event.target.files?.[0];
 
     if (!file) return;
@@ -115,6 +119,7 @@ export default function MercuryImportPage() {
   }
 
   function handleImport() {
+    if (!permissions.canEditTransactions) return;
     if (!selectedRows.length) return;
 
     importTransactions(selectedRows.map((row) => mercuryImportRowToDraft(row)), {
@@ -153,6 +158,8 @@ export default function MercuryImportPage() {
         title={t("importMercuryCsv")}
       />
 
+      {!permissions.canEditTransactions ? <PermissionNotice detailKey="permissionRequiredOwnerAdmin" /> : null}
+
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <div className="grid gap-4 lg:grid-cols-[1fr_18rem] lg:items-center">
           <div>
@@ -166,15 +173,20 @@ export default function MercuryImportPage() {
             <input
               accept=".csv,text/csv"
               className="hidden"
+              disabled={!permissions.canEditTransactions}
               onChange={handleFileChange}
               ref={fileInputRef}
               type="file"
             />
-            <Button onClick={() => fileInputRef.current?.click()} variant="primary">
+            <Button
+              disabled={!permissions.canEditTransactions}
+              onClick={() => fileInputRef.current?.click()}
+              variant="primary"
+            >
               <FileUp aria-hidden="true" className="h-4 w-4" />
               {t("chooseCsvFile")}
             </Button>
-            <Button disabled={!rows.length} onClick={() => setAllSelected(false)}>
+            <Button disabled={!permissions.canEditTransactions || !rows.length} onClick={() => setAllSelected(false)}>
               <RefreshCw aria-hidden="true" className="h-4 w-4" />
               {t("clearSelection")}
             </Button>
@@ -262,10 +274,10 @@ export default function MercuryImportPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button disabled={!rows.length} onClick={() => setAllSelected(true)}>
+            <Button disabled={!permissions.canEditTransactions || !rows.length} onClick={() => setAllSelected(true)}>
               {t("selectAllRows")}
             </Button>
-            <Button disabled={!selectedRows.length} onClick={handleImport} variant="primary">
+            <Button disabled={!permissions.canEditTransactions || !selectedRows.length} onClick={handleImport} variant="primary">
               <Upload aria-hidden="true" className="h-4 w-4" />
               {t("importSelectedRows")}
             </Button>
@@ -301,7 +313,7 @@ export default function MercuryImportPage() {
                         <input
                           checked={row.selected}
                           className="h-4 w-4 rounded border-line text-marine"
-                          disabled={row.imported || !canSelect}
+                          disabled={!permissions.canEditTransactions || row.imported || !canSelect}
                           onChange={(event) => updateRow(row.rowId, { selected: event.target.checked })}
                           type="checkbox"
                         />
@@ -328,7 +340,7 @@ export default function MercuryImportPage() {
                       <td className="table-cell min-w-52">
                         <select
                           className="form-input"
-                          disabled={row.imported}
+                          disabled={!permissions.canEditTransactions || row.imported}
                           onChange={(event) => updateCategory(row.rowId, event.target.value)}
                           value={row.category}
                         >
@@ -344,7 +356,7 @@ export default function MercuryImportPage() {
                         <input
                           checked={row.receipt_required}
                           className="h-4 w-4 rounded border-line text-marine"
-                          disabled={row.imported}
+                          disabled={!permissions.canEditTransactions || row.imported}
                           onChange={(event) =>
                             updateRow(row.rowId, { receipt_required: event.target.checked })
                           }
@@ -355,7 +367,7 @@ export default function MercuryImportPage() {
                         <input
                           checked={row.reconciled}
                           className="h-4 w-4 rounded border-line text-marine"
-                          disabled={row.imported}
+                          disabled={!permissions.canEditTransactions || row.imported}
                           onChange={(event) =>
                             updateRow(row.rowId, { reconciled: event.target.checked })
                           }

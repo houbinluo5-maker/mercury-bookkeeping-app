@@ -6,6 +6,12 @@ import {
   auditSources,
   type TransactionAuditOptions
 } from "@/lib/audit";
+import { logPermissionDenied } from "@/lib/permission-audit-server";
+import {
+  canDeleteTransactions,
+  canEditTransactions,
+  permissionDeniedMessage
+} from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   createSupabaseTransaction,
@@ -95,6 +101,18 @@ function badRequest(message: string) {
     },
     { status: 400 }
   );
+}
+
+async function forbidden(
+  auth: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+  attemptedAction: string,
+  entityId = ""
+) {
+  if (auth) {
+    await logPermissionDenied(auth, attemptedAction, "transaction", entityId);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
 }
 
 function supabaseError(error: unknown) {
@@ -466,6 +484,10 @@ export async function POST(request: NextRequest) {
     const action = body.action;
 
     if (action === "create") {
+      if (!canEditTransactions(auth.membership)) {
+        return forbidden(auth, "transaction.create");
+      }
+
       const result = await createSupabaseTransaction(
         validateTransaction(body.transaction),
         withAuthenticatedActor(validateCreateAudit(body.audit, "manual"), auth),
@@ -477,6 +499,11 @@ export async function POST(request: NextRequest) {
 
     if (action === "update") {
       const id = readId(body);
+
+      if (!canEditTransactions(auth.membership)) {
+        return forbidden(auth, "transaction.update", id);
+      }
+
       const result = await updateSupabaseTransaction(
         id,
         validateTransactionPatch(body.transaction),
@@ -489,6 +516,11 @@ export async function POST(request: NextRequest) {
 
     if (action === "delete") {
       const id = readId(body);
+
+      if (!canDeleteTransactions(auth.membership)) {
+        return forbidden(auth, "transaction.delete", id);
+      }
+
       const result = await deleteSupabaseTransaction(
         id,
         withAuthenticatedActor(validateCreateAudit(body.audit, "manual"), auth),
@@ -499,6 +531,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "import") {
+      if (!canEditTransactions(auth.membership)) {
+        return forbidden(auth, "transaction.import");
+      }
+
       const result = await importSupabaseTransactions(
         validateImportTransactions(body.transactions),
         withAuthenticatedActor(validateCreateAudit(body.audit, "csv_import"), auth),

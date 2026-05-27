@@ -12,6 +12,7 @@ import {
   RECEIPT_ACCEPT_ATTRIBUTE,
   validateReceiptFile
 } from "@/lib/receipt-files";
+import { useBookkeeping } from "@/lib/storage";
 
 type ReceiptUploadControlProps = {
   compact?: boolean;
@@ -25,6 +26,7 @@ type ReceiptUploadControlProps = {
   ) => void;
   receiptLink: string;
   receiptRequired: boolean;
+  readOnly?: boolean;
   transactionId: string;
 };
 
@@ -51,19 +53,25 @@ export function ReceiptUploadControl({
   onReceiptLinkChange,
   receiptLink,
   receiptRequired,
+  readOnly = false,
   transactionId
 }: ReceiptUploadControlProps) {
   const inputId = useId();
+  const { permissions } = useBookkeeping();
   const { t } = useI18n();
   const [busy, setBusy] = useState<"delete" | "upload" | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const hasReceipt = Boolean(receiptLink.trim());
   const receiptHref = getReceiptAccessUrl(receiptLink);
-  const isBusy = Boolean(busy);
+  const canUpload = !readOnly && permissions.canUploadReceipts;
+  const canDelete = !readOnly && permissions.canDeleteReceipts;
+  const isBusy = Boolean(busy) || (!canUpload && !canDelete);
 
   async function uploadReceipt(file: File) {
     const validationError = validateReceiptFile(file);
+
+    if (!canUpload) return;
 
     setError("");
     setMessage("");
@@ -105,6 +113,8 @@ export function ReceiptUploadControl({
 
   async function deleteReceipt() {
     if (!receiptLink.trim()) return;
+    if (!canDelete) return;
+
     const reason = promptOptionalAuditReason(t, t("deleteReceipt"));
 
     if (reason === null) return;
@@ -174,6 +184,7 @@ export function ReceiptUploadControl({
         ) : null}
       </div>
 
+      {canUpload || canDelete ? (
       <div className="flex flex-wrap gap-2">
         <label
           aria-disabled={isBusy}
@@ -202,7 +213,7 @@ export function ReceiptUploadControl({
           onChange={onFileChange}
           type="file"
         />
-        {hasReceipt ? (
+        {hasReceipt && canDelete ? (
           <Button
             className={compact ? "h-9 px-2 text-xs" : ""}
             disabled={isBusy}
@@ -214,6 +225,11 @@ export function ReceiptUploadControl({
           </Button>
         ) : null}
       </div>
+      ) : (
+        <p className="rounded-md border border-line bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+          {t("readOnlyWorkspaceAccess")} {t("askOwnerForEditAccess")}
+        </p>
+      )}
 
       <p className="text-xs text-slate-500">{t("receiptUploadHelp")}</p>
       {message ? <p className="text-xs font-medium text-emerald-700">{message}</p> : null}

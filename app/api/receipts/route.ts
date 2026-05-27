@@ -10,6 +10,12 @@ import {
   validateReceiptFile,
   type ReceiptFileValidationError
 } from "@/lib/receipt-files";
+import { logPermissionDenied } from "@/lib/permission-audit-server";
+import {
+  canDeleteReceipts,
+  canUploadReceipts,
+  permissionDeniedMessage
+} from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase-server";
 
@@ -21,6 +27,18 @@ type StorageErrorBody = {
 
 function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+async function forbidden(
+  auth: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+  attemptedAction: string,
+  entityId = ""
+) {
+  if (auth) {
+    await logPermissionDenied(auth, attemptedAction, "receipt", entityId);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
 }
 
 function supabaseNotConfigured() {
@@ -136,6 +154,7 @@ async function deleteStoredReceipt(path: string) {
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
   if (!auth) return unauthorized();
+  if (!canUploadReceipts(auth.membership)) return forbidden(auth, "receipt.upload");
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
@@ -156,6 +175,10 @@ export async function POST(request: NextRequest) {
 
     if (validationError) {
       return NextResponse.json({ error: validationMessage(validationError) }, { status: 400 });
+    }
+
+    if (currentPath.startsWith("receipts/") && !currentPath.startsWith(`receipts/${auth.workspace.id}/`)) {
+      return NextResponse.json({ error: "Receipt path does not belong to this workspace." }, { status: 403 });
     }
 
     const contentType = getReceiptContentType(file);
@@ -205,6 +228,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
   if (!auth) return unauthorized();
+  if (!canDeleteReceipts(auth.membership)) return forbidden(auth, "receipt.delete");
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {

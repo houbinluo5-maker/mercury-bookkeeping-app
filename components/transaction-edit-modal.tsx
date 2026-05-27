@@ -5,6 +5,7 @@ import { Trash2, X } from "lucide-react";
 import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { promptOptionalAuditReason, promptRequiredAuditReason } from "@/lib/audit-reason";
 import { useI18n } from "@/lib/i18n";
@@ -31,7 +32,7 @@ export function TransactionEditModal({
   transaction: Transaction | null;
   onClose: () => void;
 }) {
-  const { auditLogs, categories, deleteTransaction, monthlyClosings, updateTransaction } = useBookkeeping();
+  const { auditLogs, categories, deleteTransaction, monthlyClosings, permissions, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [draft, setDraft] = useState<Transaction | null>(transaction);
 
@@ -42,6 +43,7 @@ export function TransactionEditModal({
 
   if (!transaction || !draft) return null;
   const currentTransaction = transaction;
+  const readOnly = !permissions.canEditTransactions;
 
   function setDraftField<K extends keyof Transaction>(key: K, value: Transaction[K]) {
     setDraft((current) => (current ? { ...current, [key]: value } : current));
@@ -54,6 +56,7 @@ export function TransactionEditModal({
   ) {
     const originalValue = currentTransaction[key];
 
+    if (readOnly) return;
     if (valuesMatch(originalValue, value)) return;
 
     let reason = options.reason;
@@ -87,6 +90,8 @@ export function TransactionEditModal({
   }
 
   function onCategoryChange(categoryName: string) {
+    if (readOnly) return;
+
     const category = categories.find((item) => item.name === categoryName);
     const reason = isDateInClosedPeriod(monthlyClosings, currentTransaction.date)
       ? promptRequiredAuditReason(t, t("category"))
@@ -124,6 +129,8 @@ export function TransactionEditModal({
   }
 
   function deleteCurrentTransaction() {
+    if (!permissions.canDeleteTransactions) return;
+
     const isClosedPeriod = isDateInClosedPeriod(monthlyClosings, currentTransaction.date);
 
     if (!window.confirm(isClosedPeriod ? t("closedPeriodDeleteWarning") : t("deleteTransactionQuestion"))) return;
@@ -166,11 +173,13 @@ export function TransactionEditModal({
 
         <div className="grid gap-6 p-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="space-y-4">
+            {readOnly ? <PermissionNotice /> : null}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="space-y-1">
                 <span className="form-label">{t("date")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   onBlur={(event) => commitField("date", event.target.value)}
                   onChange={(event) => setDraftField("date", event.target.value)}
                   type="date"
@@ -181,6 +190,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("account")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   list="edit-account-options"
                   onBlur={(event) => commitField("account", event.target.value)}
                   onChange={(event) => setDraftField("account", event.target.value)}
@@ -196,6 +206,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("source")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   list="edit-source-options"
                   onBlur={(event) => commitField("source", event.target.value)}
                   onChange={(event) => setDraftField("source", event.target.value)}
@@ -211,6 +222,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("vendor")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   onBlur={(event) => commitField("vendor", event.target.value)}
                   onChange={(event) => setDraftField("vendor", event.target.value)}
                   value={draft.vendor}
@@ -220,6 +232,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("description")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   onBlur={(event) => commitField("description", event.target.value)}
                   onChange={(event) => setDraftField("description", event.target.value)}
                   value={draft.description}
@@ -229,6 +242,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("moneyIn")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   min="0"
                   onBlur={(event) =>
                     commitField("money_in", Number(event.target.value), { promptKey: "moneyIn" })
@@ -243,6 +257,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("moneyOut")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   min="0"
                   onBlur={(event) =>
                     commitField("money_out", Number(event.target.value), { promptKey: "moneyOut" })
@@ -257,6 +272,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("category")}</span>
                 <select
                   className="form-input"
+                  disabled={readOnly}
                   onChange={(event) => {
                     setDraftField("category", event.target.value);
                     onCategoryChange(event.target.value);
@@ -274,6 +290,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("taxLine")}</span>
                 <input
                   className="form-input"
+                  disabled={readOnly}
                   onBlur={(event) =>
                     commitField("tax_line", event.target.value, { promptKey: "taxLine" })
                   }
@@ -286,6 +303,7 @@ export function TransactionEditModal({
                   <span className="form-label">{t("receiptLink")}</span>
                   <input
                     className="form-input"
+                    disabled={readOnly}
                     onBlur={(event) =>
                       commitField("receipt_link", event.target.value, {
                         promptKey:
@@ -317,6 +335,7 @@ export function TransactionEditModal({
                   }}
                   receiptLink={draft.receipt_link}
                   receiptRequired={draft.receipt_required}
+                  readOnly={readOnly}
                   transactionId={currentTransaction.id}
                 />
               </div>
@@ -324,6 +343,7 @@ export function TransactionEditModal({
                 <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
                   <input
                     checked={draft.receipt_required}
+                    disabled={readOnly}
                     onChange={(event) => {
                       const nextValue = event.target.checked;
                       setDraftField("receipt_required", nextValue);
@@ -336,6 +356,7 @@ export function TransactionEditModal({
                 <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
                   <input
                     checked={draft.reconciled}
+                    disabled={readOnly}
                     onChange={(event) => {
                       const nextValue = event.target.checked;
                       setDraftField("reconciled", nextValue);
@@ -350,6 +371,7 @@ export function TransactionEditModal({
                 <span className="form-label">{t("notes")}</span>
                 <textarea
                   className="form-textarea"
+                  disabled={readOnly}
                   onBlur={(event) => commitField("notes", event.target.value)}
                   onChange={(event) => setDraftField("notes", event.target.value)}
                   value={draft.notes}
@@ -367,10 +389,12 @@ export function TransactionEditModal({
         </div>
 
         <div className="flex flex-wrap justify-between gap-2 border-t border-line p-4">
-          <Button onClick={deleteCurrentTransaction} variant="danger">
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
-            {t("deleteTransaction")}
-          </Button>
+          {permissions.canDeleteTransactions ? (
+            <Button onClick={deleteCurrentTransaction} variant="danger">
+              <Trash2 aria-hidden="true" className="h-4 w-4" />
+              {t("deleteTransaction")}
+            </Button>
+          ) : <span />}
           <Button onClick={onClose} variant="primary">
             {t("done")}
           </Button>

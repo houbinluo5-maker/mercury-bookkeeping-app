@@ -39,7 +39,8 @@ export const auditActions: AuditAction[] = [
   "invitation_accepted",
   "invitation_revoked",
   "member_removed",
-  "member_role_changed"
+  "member_role_changed",
+  "permission_denied"
 ];
 
 export const auditSources: AuditSource[] = [

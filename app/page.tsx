@@ -6,6 +6,7 @@ import { Button, buttonClassName } from "@/components/button";
 import { Badge } from "@/components/badge";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReconciliationLink } from "@/components/reconciliation-link";
 import { TransactionsTable } from "@/components/transactions-table";
 import { ActionPanel, CommandCard, SectionHeader } from "@/components/ui-primitives";
@@ -16,7 +17,7 @@ import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 export default function DashboardPage() {
-  const { monthlyClosings, transactions, settings } = useBookkeeping();
+  const { monthlyClosings, permissions, transactions, settings } = useBookkeeping();
   const { t } = useI18n();
   const yearTransactions = filterByYear(transactions, settings.tax_year);
   const stats = getDashboardStats(yearTransactions);
@@ -48,10 +49,12 @@ export default function DashboardPage() {
               <Download aria-hidden="true" className="h-4 w-4" />
               {t("export")}
             </Button>
-            <Link className={buttonClassName("primary")} href="/transactions/new">
-              <PlusCircle aria-hidden="true" className="h-4 w-4" />
-              {t("add")}
-            </Link>
+            {permissions.canEditTransactions ? (
+              <Link className={buttonClassName("primary")} href="/transactions/new">
+                <PlusCircle aria-hidden="true" className="h-4 w-4" />
+                {t("add")}
+              </Link>
+            ) : null}
           </>
         }
         eyebrow={t("executiveFinanceOs")}
@@ -78,6 +81,8 @@ export default function DashboardPage() {
 
       <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
 
+      {!permissions.canEditTransactions ? <PermissionNotice /> : null}
+
       <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
         <div className="premium-panel p-5">
           <SectionHeader description={t("bookkeepingHealthHelp")} title={t("financeHealthPanel")} />
@@ -102,18 +107,24 @@ export default function DashboardPage() {
         </div>
 
         <ActionPanel description={t("quickActionsHelp")} title={t("quickActions")}>
-          <Link className={buttonClassName("primary", "w-full justify-start")} href="/transactions/new">
-            <PlusCircle aria-hidden="true" className="h-4 w-4" />
-            {t("addTransaction")}
-          </Link>
-          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/imports/mercury">
-            <Upload aria-hidden="true" className="h-4 w-4" />
-            {t("importMercuryCsv")}
-          </Link>
-          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/receipts">
-            <ReceiptText aria-hidden="true" className="h-4 w-4" />
-            {t("uploadReceipt")}
-          </Link>
+          {permissions.canEditTransactions ? (
+            <Link className={buttonClassName("primary", "w-full justify-start")} href="/transactions/new">
+              <PlusCircle aria-hidden="true" className="h-4 w-4" />
+              {t("addTransaction")}
+            </Link>
+          ) : null}
+          {permissions.canEditTransactions ? (
+            <Link className={buttonClassName("secondary", "w-full justify-start")} href="/imports/mercury">
+              <Upload aria-hidden="true" className="h-4 w-4" />
+              {t("importMercuryCsv")}
+            </Link>
+          ) : null}
+          {permissions.canUploadReceipts ? (
+            <Link className={buttonClassName("secondary", "w-full justify-start")} href="/receipts">
+              <ReceiptText aria-hidden="true" className="h-4 w-4" />
+              {t("uploadReceipt")}
+            </Link>
+          ) : null}
           <Link className={buttonClassName("secondary", "w-full justify-start")} href="/reconciliation">
             <Wand2 aria-hidden="true" className="h-4 w-4" />
             {t("openReconciliationCenter")}

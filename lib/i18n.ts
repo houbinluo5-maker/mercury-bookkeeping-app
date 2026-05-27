@@ -199,6 +199,11 @@ const translations: Record<Language, Record<string, string>> = {
     parsedFromNaturalLanguage: "Parsed from natural language.",
     passwordNotAccepted: "Password was not accepted.",
     password: "Password",
+    askOwnerForEditAccess: "Ask the workspace owner for edit access.",
+    permissionRequiredOwner: "Permission required: Owner.",
+    permissionRequiredOwnerAdmin: "Permission required: Owner or Admin.",
+    readOnlyMode: "Read-only mode",
+    readOnlyWorkspaceAccess: "You have read-only access to this workspace.",
     privateBookkeepingAccess: "Private bookkeeping access",
     accountSettings: "Account",
     authHeroSubtitle:
@@ -377,6 +382,7 @@ const translations: Record<Language, Record<string, string>> = {
     revoke: "Revoke",
     teamSecurityNote:
       "Invitations never grant owner access. Tokens should be shared only with the intended recipient.",
+    view: "View",
     workspaceInvitation: "Workspace invitation",
     joinWorkspace: "Join workspace",
     joinWorkspaceDescription: "Accept this invitation with the same email address it was sent to.",
@@ -640,7 +646,8 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.invitation_accepted": "Invitation accepted",
     "auditAction.invitation_revoked": "Invitation revoked",
     "auditAction.member_removed": "Member removed",
-    "auditAction.member_role_changed": "Member role changed"
+    "auditAction.member_role_changed": "Member role changed",
+    "auditAction.permission_denied": "Permission denied"
   },
   zh: {
     account: "账户",
@@ -784,6 +791,11 @@ const translations: Record<Language, Record<string, string>> = {
     parseSentence: "解析交易",
     parsedFromNaturalLanguage: "已从自然语言解析。",
     passwordNotAccepted: "密码不正确。",
+    askOwnerForEditAccess: "请向工作区所有者申请编辑权限。",
+    permissionRequiredOwner: "需要权限：所有者。",
+    permissionRequiredOwnerAdmin: "需要权限：所有者或管理员。",
+    readOnlyMode: "只读模式",
+    readOnlyWorkspaceAccess: "你对此工作区拥有只读访问权限。",
     privateBookkeepingAccess: "私人记账访问",
     quarterlyReport: "季度报表",
     receipt: "收据",
@@ -934,6 +946,7 @@ const translations: Record<Language, Record<string, string>> = {
     invitationRevoked: "邀请已撤销。",
     revoke: "撤销",
     teamSecurityNote: "邀请不会授予所有者权限。邀请链接只应发送给指定收件人。",
+    view: "查看",
     workspaceInvitation: "工作区邀请",
     joinWorkspace: "加入工作区",
     joinWorkspaceDescription: "请使用收到邀请的同一邮箱接受此邀请。",
@@ -1174,7 +1187,8 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.invitation_accepted": "邀请已接受",
     "auditAction.invitation_revoked": "邀请已撤销",
     "auditAction.member_removed": "成员已移除",
-    "auditAction.member_role_changed": "成员角色已变更"
+    "auditAction.member_role_changed": "成员角色已变更",
+    "auditAction.permission_denied": "权限被拒绝"
   }
 };
 

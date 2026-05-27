@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { permissionsForRole } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   getLegacyWorkspaceClaimStatus,
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
         }
       : null,
     workspace: context.workspace,
+    permissions: permissionsForRole(context.membership),
     role: context.membership?.role ?? "owner"
   });
 }

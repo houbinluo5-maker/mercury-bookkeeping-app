@@ -6,6 +6,7 @@ import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { YearSelect } from "@/components/period-selectors";
 import { getAvailableYears } from "@/lib/calculations";
 import {
@@ -68,6 +69,7 @@ export default function ClosingPage() {
     categories,
     closeMonth,
     monthlyClosings,
+    permissions,
     reopenMonth,
     settings,
     transactions
@@ -106,6 +108,8 @@ export default function ClosingPage() {
   const changedClosedCount = cards.filter((card) => card.closedPeriodChangeCount > 0).length;
 
   function openCloseModal(card: MonthlyClosingCard) {
+    if (!permissions.canCloseMonth) return;
+
     const defaults = {
       noMissingRequiredReceipts: card.missingReceiptsCount === 0,
       noNeedsReviewTransactions: card.needsReviewCount === 0,
@@ -120,6 +124,7 @@ export default function ClosingPage() {
   }
 
   async function submitClose() {
+    if (!permissions.canCloseMonth) return;
     if (!activeCard) return;
     if (!reason.trim()) return;
 
@@ -147,6 +152,8 @@ export default function ClosingPage() {
   }
 
   async function submitReopen(card: MonthlyClosingCard) {
+    if (!permissions.canReopenMonth) return;
+
     const response = window.prompt(t("reopenReason"));
 
     if (!response?.trim()) return;
@@ -230,6 +237,10 @@ export default function ClosingPage() {
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <p className="text-sm text-slate-700">{t("monthlyClosingHelp")}</p>
       </section>
+
+      {!permissions.canCloseMonth && !permissions.canReopenMonth ? (
+        <PermissionNotice detailKey="permissionRequiredOwnerAdmin" />
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard label={t("closedStatus")} tone="green" value={String(closedCount)} />
@@ -331,17 +342,17 @@ export default function ClosingPage() {
             ) : null}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {card.closing.status === "closed" ? (
+              {card.closing.status === "closed" && permissions.canReopenMonth ? (
                 <Button onClick={() => submitReopen(card)}>
                   <RotateCcw aria-hidden="true" className="h-4 w-4" />
                   {t("reopenMonth")}
                 </Button>
-              ) : (
+              ) : card.closing.status !== "closed" && permissions.canCloseMonth ? (
                 <Button onClick={() => openCloseModal(card)} variant="primary">
                   <LockKeyhole aria-hidden="true" className="h-4 w-4" />
                   {t("closeMonth")}
                 </Button>
-              )}
+              ) : null}
               <Button onClick={() => downloadCsv(
                 ["Checklist Item", "Status"],
                 checklistItems.map(([key]) => [
