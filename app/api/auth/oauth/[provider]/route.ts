@@ -7,6 +7,7 @@ import {
   isAuthProviderEnabled,
   isSafeRedirectPath
 } from "@/lib/auth";
+import { canonicalUrl } from "@/lib/canonical-host";
 
 const providerMap = {
   azure: "azure",
@@ -31,25 +32,25 @@ export async function GET(
   const { provider } = await params;
 
   if (!(provider in providerMap)) {
-    return NextResponse.redirect(new URL("/login?error=provider_disabled", request.url), { status: 303 });
+    return NextResponse.redirect(canonicalUrl("/login?error=provider_disabled", request), { status: 303 });
   }
 
   const mappedProvider = provider as keyof typeof providerMap;
 
   if (!isAuthProviderEnabled(mappedProvider)) {
-    return NextResponse.redirect(new URL("/login?error=provider_disabled", request.url), { status: 303 });
+    return NextResponse.redirect(canonicalUrl("/login?error=provider_disabled", request), { status: 303 });
   }
 
   const supabaseUrl = getPublicSupabaseUrl().replace(/\/+$/, "");
   const anonKey = getPublicSupabaseAnonKey();
 
   if (!supabaseUrl || !anonKey) {
-    return NextResponse.redirect(new URL("/login?error=supabase_config", request.url), { status: 303 });
+    return NextResponse.redirect(canonicalUrl("/login?error=supabase_config", request), { status: 303 });
   }
 
   const requestedNext = request.nextUrl.searchParams.get("next") ?? "/";
   const nextPath = isSafeRedirectPath(requestedNext) ? requestedNext : "/";
-  const callbackUrl = new URL("/api/auth/callback", request.url);
+  const callbackUrl = canonicalUrl("/api/auth/callback", request);
   callbackUrl.searchParams.set("next", nextPath);
 
   const codeVerifier = createCodeVerifier();

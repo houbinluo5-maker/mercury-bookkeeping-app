@@ -4,6 +4,7 @@ import {
   SUPABASE_OAUTH_CODE_VERIFIER_COOKIE,
   isSafeRedirectPath
 } from "@/lib/auth";
+import { canonicalUrl } from "@/lib/canonical-host";
 import {
   ensureProfileAndWorkspace,
   exchangeOAuthCodeForSession
@@ -31,7 +32,7 @@ function clearVerifierCookie(response: NextResponse) {
 }
 
 function callbackErrorRedirect(request: NextRequest, nextPath: string, message: string) {
-  const url = new URL("/auth/callback", request.url);
+  const url = canonicalUrl("/auth/callback", request);
   url.searchParams.set("error", "oauth_callback");
   url.searchParams.set("message", message);
   url.searchParams.set("next", nextPath);
@@ -68,7 +69,7 @@ async function exchangeCode(request: NextRequest, code: string, nextPath: string
 
   const session = await exchangeOAuthCodeForSession(code, codeVerifier);
   const { workspace } = await ensureProfileAndWorkspace(session.user);
-  const response = NextResponse.redirect(new URL(nextPath, request.url), { status: 303 });
+  const response = NextResponse.redirect(canonicalUrl(nextPath, request), { status: 303 });
 
   setSupabaseSessionCookies(response, session, workspace);
   clearVerifierCookie(response);
