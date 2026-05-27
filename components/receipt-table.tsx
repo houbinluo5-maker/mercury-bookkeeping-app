@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { AuditHistoryPanel } from "@/components/audit-history-panel";
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { DataTableShell, EmptyState, FilterBar, SectionHeader } from "@/components/ui-primitives";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -24,7 +25,7 @@ const filters = [
 ];
 
 export function ReceiptTable() {
-  const { auditLogs, categories, monthlyClosings, transactions, updateTransaction } = useBookkeeping();
+  const { auditLogs, categories, monthlyClosings, permissions, transactions, updateTransaction } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const [filter, setFilter] = useState("receiptMissing");
   const [receiptDrafts, setReceiptDrafts] = useState<Record<string, string>>({});
@@ -78,6 +79,8 @@ export function ReceiptTable() {
   }
 
   function commitReceiptLink(transaction: Transaction) {
+    if (!permissions.canUploadReceipts) return;
+
     const nextValue = receiptInputValue(transaction).trim();
 
     if (nextValue === transaction.receipt_link) return;
@@ -109,6 +112,8 @@ export function ReceiptTable() {
 
   return (
     <div className="space-y-6">
+      {!permissions.canUploadReceipts ? <PermissionNotice /> : null}
+
       <section className="premium-panel p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -150,6 +155,7 @@ export function ReceiptTable() {
                     }
                     receiptLink={transaction.receipt_link}
                     receiptRequired={transaction.receipt_required}
+                    readOnly={!permissions.canUploadReceipts}
                     transactionId={transaction.id}
                   />
                 </div>
@@ -208,6 +214,7 @@ export function ReceiptTable() {
                       <div className="space-y-3">
                         <input
                           className="form-input"
+                          disabled={!permissions.canUploadReceipts}
                           onBlur={() => commitReceiptLink(transaction)}
                           onChange={(event) =>
                             setReceiptDrafts((current) => ({
@@ -240,6 +247,7 @@ export function ReceiptTable() {
                           }}
                           receiptLink={transaction.receipt_link}
                           receiptRequired={transaction.receipt_required}
+                          readOnly={!permissions.canUploadReceipts}
                           transactionId={transaction.id}
                         />
                         <details>

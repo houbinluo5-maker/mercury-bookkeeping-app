@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { logPermissionDenied } from "@/lib/permission-audit-server";
+import { PermissionError, permissionDeniedMessage } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   changeTeamMemberRole,
@@ -19,6 +21,17 @@ function badRequest(error: unknown) {
   );
 }
 
+async function forbidden(
+  auth: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+  attemptedAction: string
+) {
+  if (auth) {
+    await logPermissionDenied(auth, attemptedAction, "workspace", auth.workspace.id);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
+}
+
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
   if (!auth) return unauthorized();
@@ -33,6 +46,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
   if (!auth) return unauthorized();
+  let attemptedAction = "unknown";
 
   try {
     const body = (await request.json()) as {
@@ -42,6 +56,7 @@ export async function POST(request: NextRequest) {
       memberId?: string;
       role?: string;
     };
+    attemptedAction = body.action || "unknown";
 
     if (body.action === "invite") {
       return NextResponse.json(
@@ -63,6 +78,10 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: "Unsupported team action." }, { status: 400 });
   } catch (error) {
+    if (error instanceof PermissionError) {
+      return forbidden(auth, `team.${attemptedAction}`);
+    }
+
     return badRequest(error);
   }
 }

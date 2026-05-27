@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Download, Edit3, PlusCircle, Search } from "lucide-react";
 import { Badge } from "@/components/badge";
 import { Button, buttonClassName } from "@/components/button";
+import { PermissionNotice } from "@/components/permission-notice";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
 import { DataTableShell, EmptyState, FilterBar } from "@/components/ui-primitives";
 import { downloadExcel } from "@/lib/export-excel";
@@ -21,7 +22,7 @@ export function TransactionsTable({
   transactions: Transaction[];
   compact?: boolean;
 }) {
-  const { categories, monthlyClosings } = useBookkeeping();
+  const { categories, monthlyClosings, permissions } = useBookkeeping();
   const { categoryLabel, t, taxLineLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -127,14 +128,18 @@ export function TransactionsTable({
               <Download aria-hidden="true" className="h-4 w-4" />
               {t("export")}
             </Button>
-            <Link className={buttonClassName("primary")} href="/transactions/new">
-              <PlusCircle aria-hidden="true" className="h-4 w-4" />
-              {t("add")}
-            </Link>
+            {permissions.canEditTransactions ? (
+              <Link className={buttonClassName("primary")} href="/transactions/new">
+                <PlusCircle aria-hidden="true" className="h-4 w-4" />
+                {t("add")}
+              </Link>
+            ) : null}
           </div>
         </div>
         </FilterBar>
       ) : null}
+
+      {!compact && !permissions.canEditTransactions ? <PermissionNotice /> : null}
 
       {!compact ? (
         <div className="space-y-3 md:hidden">
@@ -149,7 +154,7 @@ export function TransactionsTable({
                 </div>
                 <Button className="h-9 px-2" onClick={() => setEditingTransactionId(transaction.id)}>
                   <Edit3 aria-hidden="true" className="h-4 w-4" />
-                  {t("edit")}
+                  {permissions.canEditTransactions ? t("edit") : t("view")}
                 </Button>
               </div>
               <p className="mt-3 text-sm text-slate-700">{transaction.description}</p>
@@ -231,7 +236,7 @@ export function TransactionsTable({
                   <td className="table-cell text-right">
                       <Button className="h-9 px-2" onClick={() => setEditingTransactionId(transaction.id)}>
                         <Edit3 aria-hidden="true" className="h-4 w-4" />
-                        {t("edit")}
+                        {permissions.canEditTransactions ? t("edit") : t("view")}
                       </Button>
                     </td>
                   ) : null}

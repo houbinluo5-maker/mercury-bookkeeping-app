@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { logPermissionDenied } from "@/lib/permission-audit-server";
+import { canManageWorkspace, permissionDeniedMessage } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   isSupabaseConfigured,
@@ -19,6 +21,14 @@ function unauthorized() {
     },
     { status: 401 }
   );
+}
+
+async function forbidden(auth: Awaited<ReturnType<typeof getAuthenticatedContext>>) {
+  if (auth) {
+    await logPermissionDenied(auth, "storage.full_backup_write", "workspace", auth.workspace.id);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
 }
 
 function supabaseNotConfigured() {
@@ -69,7 +79,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  if (!(await getAuthenticatedContext(request))) return unauthorized();
+  const auth = await getAuthenticatedContext(request);
+  if (!auth) return unauthorized();
+  if (!canManageWorkspace(auth.membership)) return forbidden(auth);
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   return NextResponse.json(

@@ -30,6 +30,11 @@ import {
   getReceiptRequiredDefault,
   normalizeCategoryReceiptDefault
 } from "@/lib/receipt-requirements";
+import {
+  permissionDeniedMessage,
+  permissionsForRole,
+  type WorkspacePermissions
+} from "@/lib/permissions";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
 import type {
   AppSettings,
@@ -43,7 +48,8 @@ import type {
   StorageStatus,
   SupabaseHealthCheck,
   Transaction,
-  TransactionDraft
+  TransactionDraft,
+  WorkspaceRole
 } from "@/lib/types";
 
 type CreateTransactionAuditOptions = {
@@ -64,7 +70,9 @@ type BookkeepingContextValue = {
   settings: AppSettings;
   categories: Category[];
   auditLogs: AuditLog[];
+  permissions: WorkspacePermissions;
   storageStatus: StorageStatus;
+  workspaceRole: WorkspaceRole | "unknown";
   addTransaction: (transaction: TransactionDraft, audit?: CreateTransactionAuditOptions) => Transaction;
   bulkUpdateTransactions: (updates: BulkTransactionUpdate[]) => void;
   importTransactions: (
@@ -325,7 +333,30 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [monthlyClosings, setMonthlyClosings] = useState<MonthlyClosing[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>(checkingStorageStatus);
+  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | "unknown">("owner");
   const [loaded, setLoaded] = useState(false);
+  const permissions = useMemo(() => permissionsForRole(workspaceRole === "unknown" ? null : workspaceRole), [workspaceRole]);
+
+  const setPermissionDeniedStatus = useCallback((action: string) => {
+    setStorageStatus((current) => ({
+      ...current,
+      apiStatus: 403,
+      apiStatusText: "Forbidden",
+      error: permissionDeniedMessage,
+      mode: "error",
+      message: `${permissionDeniedMessage} ${action}`
+    }));
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const account = (await response.json()) as { role?: WorkspaceRole };
+        setWorkspaceRole(account.role ?? "owner");
+      })
+      .catch(() => undefined);
+  }, []);
 
   const applyBackup = useCallback((backup: Partial<LocalBackup>) => {
     const normalized = normalizeBackup(backup);
@@ -982,6 +1013,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   }, [loaded, monthlyClosings]);
 
   const syncToSupabase = useCallback(async () => {
+    if (!permissions.canManageWorkspace) {
+      setPermissionDeniedStatus("Full backup sync requires workspace owner access.");
+      return false;
+    }
+
     if (storageStatus.configured && storageStatus.mode !== "local") {
       return blockFullSupabaseSync();
     }
@@ -998,8 +1034,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     blockFullSupabaseSync,
     categoryState,
     monthlyClosings,
+    permissions.canManageWorkspace,
     sendAuditEntriesToSupabase,
     sendBackupToSupabase,
+    setPermissionDeniedStatus,
     settings,
     storageStatus.configured,
     storageStatus.mode,
@@ -1007,6 +1045,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   ]);
 
   const migrateLocalDataToSupabase = useCallback(async () => {
+    if (!permissions.canManageWorkspace) {
+      setPermissionDeniedStatus("Migration requires workspace owner access.");
+      return false;
+    }
+
     if (storageStatus.configured && storageStatus.mode !== "local") {
       return blockFullSupabaseSync();
     }
@@ -1028,8 +1071,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     auditLogs,
     blockFullSupabaseSync,
     categoryState,
+    permissions.canManageWorkspace,
     sendAuditEntriesToSupabase,
     sendBackupToSupabase,
+    setPermissionDeniedStatus,
     settings,
     storageStatus.configured,
     storageStatus.mode,
@@ -1047,6 +1092,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       const trimmedReason = reason.trim();
 
       if (!trimmedReason) return false;
+      if (!permissions.canCloseMonth) {
+        setPermissionDeniedStatus("Monthly closing requires Owner or Admin access.");
+        return false;
+      }
 
       const summary = buildClosingSummary(
         transactions,
@@ -1148,7 +1197,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       auditLogs,
       categoryState,
       monthlyClosings,
+      permissions.canCloseMonth,
       requestMonthlyClosing,
+      setPermissionDeniedStatus,
       storageStatus.configured,
       storageStatus.mode,
       transactions
@@ -1160,6 +1211,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       const trimmedReason = reason.trim();
 
       if (!trimmedReason) return false;
+      if (!permissions.canReopenMonth) {
+        setPermissionDeniedStatus("Reopening a month requires Owner or Admin access.");
+        return false;
+      }
 
       if (storageStatus.configured && storageStatus.mode === "supabase") {
         try {
@@ -1233,7 +1288,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       auditLogs,
       categoryState,
       monthlyClosings,
+      permissions.canReopenMonth,
       requestMonthlyClosing,
+      setPermissionDeniedStatus,
       storageStatus.configured,
       storageStatus.mode,
       transactions
@@ -1242,6 +1299,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const updateClosingSummary = useCallback(
     async (year: number, month: number, summary: MonthlyClosingSummaryJson) => {
+      if (!permissions.canCloseMonth) {
+        setPermissionDeniedStatus("Monthly closing summary updates require Owner or Admin access.");
+        return false;
+      }
+
       if (storageStatus.configured && storageStatus.mode === "supabase") {
         try {
           const result = await requestMonthlyClosing({
@@ -1270,7 +1332,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     },
     [
       applyMonthlyClosingResult,
+      permissions.canCloseMonth,
       requestMonthlyClosing,
+      setPermissionDeniedStatus,
       storageStatus.configured,
       storageStatus.mode
     ]
@@ -1287,6 +1351,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         updated_at: now
       };
       const nextTransactions = sortTransactions([transaction, ...transactions]);
+
+      if (!permissions.canEditTransactions) {
+        setPermissionDeniedStatus("Transaction create is limited by your workspace role.");
+        return transaction;
+      }
 
       if (supabaseMode) {
         setTransactions(nextTransactions);
@@ -1328,7 +1397,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       auditLogs,
       categoryState,
       maybeSyncToSupabase,
+      permissions.canEditTransactions,
       persistLedgerTransaction,
+      setPermissionDeniedStatus,
       settings,
       storageStatus.configured,
       storageStatus.mode,
@@ -1338,6 +1409,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const importTransactions = useCallback(
     (drafts: TransactionDraft[], audit: CreateTransactionAuditOptions = {}) => {
+      if (!permissions.canEditTransactions) {
+        setPermissionDeniedStatus("Transaction import is limited by your workspace role.");
+        return [];
+      }
+
       const now = new Date().toISOString();
       const supabaseMode = storageStatus.configured && storageStatus.mode === "supabase";
       const importedTransactions = drafts.map((draft) => ({
@@ -1388,7 +1464,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       auditLogs,
       categoryState,
       maybeSyncToSupabase,
+      permissions.canEditTransactions,
       persistLedgerTransaction,
+      setPermissionDeniedStatus,
       settings,
       storageStatus.configured,
       storageStatus.mode,
@@ -1398,6 +1476,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const updateTransaction = useCallback(
     (id: string, draft: Partial<TransactionDraft>, audit: TransactionAuditOptions = {}) => {
+      if (!permissions.canEditTransactions) {
+        setPermissionDeniedStatus("Transaction edits are limited by your workspace role.");
+        return;
+      }
+
       const currentTransaction = transactions.find((transaction) => transaction.id === id);
 
       if (!currentTransaction) return;
@@ -1462,7 +1545,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       categoryState,
       monthlyClosings,
       maybeSyncToSupabase,
+      permissions.canEditTransactions,
       persistLedgerTransaction,
+      setPermissionDeniedStatus,
       settings,
       storageStatus.configured,
       storageStatus.mode,
@@ -1473,6 +1558,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const bulkUpdateTransactions = useCallback(
     (updates: BulkTransactionUpdate[]) => {
       if (updates.length === 0) return;
+
+      if (!permissions.canRunReconciliation) {
+        setPermissionDeniedStatus("Reconciliation changes are limited by your workspace role.");
+        return;
+      }
 
       const patchById = new Map(updates.map((update) => [update.id, update]));
       const timestamp = new Date().toISOString();
@@ -1511,11 +1601,24 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         newAuditEntries
       );
     },
-    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
+    [
+      auditLogs,
+      categoryState,
+      maybeSyncToSupabase,
+      permissions.canRunReconciliation,
+      setPermissionDeniedStatus,
+      settings,
+      transactions
+    ]
   );
 
   const deleteTransaction = useCallback(
     (id: string, audit: CreateTransactionAuditOptions = {}) => {
+      if (!permissions.canDeleteTransactions) {
+        setPermissionDeniedStatus("Transaction deletes are limited by your workspace role.");
+        return;
+      }
+
       const currentTransaction = transactions.find((transaction) => transaction.id === id);
 
       if (!currentTransaction) return;
@@ -1582,7 +1685,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       categoryState,
       monthlyClosings,
       maybeSyncToSupabase,
+      permissions.canDeleteTransactions,
       persistLedgerTransaction,
+      setPermissionDeniedStatus,
       settings,
       storageStatus.configured,
       storageStatus.mode,
@@ -1592,6 +1697,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const updateSettings = useCallback(
     (nextSettings: AppSettings, audit: SettingsAuditOptions = {}) => {
+      if (!permissions.canManageSettings) {
+        setPermissionDeniedStatus("Settings changes require workspace owner access.");
+        return;
+      }
+
       const normalized = normalizeSettings(nextSettings);
       const newAuditEntries = buildSettingsAuditLogs(settings, normalized, audit);
       const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
@@ -1605,10 +1715,23 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         newAuditEntries
       );
     },
-    [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]
+    [
+      auditLogs,
+      categoryState,
+      maybeSyncToSupabase,
+      permissions.canManageSettings,
+      setPermissionDeniedStatus,
+      settings,
+      transactions
+    ]
   );
 
   const clearTransactions = useCallback(() => {
+    if (!permissions.canDeleteTransactions) {
+      setPermissionDeniedStatus("Transaction deletes are limited by your workspace role.");
+      return;
+    }
+
     const timestamp = new Date().toISOString();
     const newAuditEntries = transactions.map((transaction) =>
       createAuditEntry({
@@ -1632,9 +1755,22 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       createBackup([], categoryState, settings, nextAuditLogs),
       newAuditEntries
     );
-  }, [auditLogs, categoryState, maybeSyncToSupabase, settings, transactions]);
+  }, [
+    auditLogs,
+    categoryState,
+    maybeSyncToSupabase,
+    permissions.canDeleteTransactions,
+    setPermissionDeniedStatus,
+    settings,
+    transactions
+  ]);
 
   const resetDemoData = useCallback(() => {
+    if (!permissions.canManageSettings) {
+      setPermissionDeniedStatus("Demo data reset requires workspace owner access.");
+      return;
+    }
+
     const timestamp = new Date().toISOString();
     const deleteEntries = transactions.map((transaction) =>
       createAuditEntry({
@@ -1681,7 +1817,14 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       createBackup(seedTransactions, categories, defaultSettings, nextAuditLogs),
       newAuditEntries
     );
-  }, [auditLogs, maybeSyncToSupabase, settings, transactions]);
+  }, [
+    auditLogs,
+    maybeSyncToSupabase,
+    permissions.canManageSettings,
+    setPermissionDeniedStatus,
+    settings,
+    transactions
+  ]);
 
   const exportBackup = useCallback<() => LocalBackup>(() => {
     return createBackup(transactions, categoryState, settings, auditLogs, monthlyClosings);
@@ -1689,6 +1832,11 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const importBackup = useCallback(
     (backup: LocalBackup) => {
+      if (!permissions.canManageSettings) {
+        setPermissionDeniedStatus("Backup import requires workspace owner access.");
+        return;
+      }
+
       const normalized = normalizeBackup(backup);
       const nextAuditLogs = mergeAuditLogs(auditLogs, normalized.audit_logs);
 
@@ -1709,7 +1857,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         supabaseConnected: current.supabaseConnected
       }));
     },
-    [auditLogs]
+    [auditLogs, permissions.canManageSettings, setPermissionDeniedStatus]
   );
 
   const value = useMemo<BookkeepingContextValue>(
@@ -1719,7 +1867,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       settings,
       categories: categoryState,
       auditLogs,
+      permissions,
       storageStatus,
+      workspaceRole,
       addTransaction,
       bulkUpdateTransactions,
       importTransactions,
@@ -1754,6 +1904,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       loadMonthlyClosings,
       migrateLocalDataToSupabase,
       monthlyClosings,
+      permissions,
       closeMonth,
       reopenMonth,
       resetDemoData,
@@ -1763,7 +1914,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       transactions,
       updateClosingSummary,
       updateSettings,
-      updateTransaction
+      updateTransaction,
+      workspaceRole
     ]
   );
 

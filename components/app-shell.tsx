@@ -97,7 +97,7 @@ function roleLabel(t: (key: string) => string, role: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { settings } = useBookkeeping();
+  const { permissions, settings } = useBookkeeping();
   const { t } = useI18n();
   const [account, setAccount] = useState<AccountSummary | null>(null);
 
@@ -142,7 +142,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {t(group.labelKey)}
                 </p>
                 <div className="mt-2 space-y-1">
-                  {group.items.map((item) => {
+                  {group.items
+                    .filter((item) => item.href !== "/transactions/new" || permissions.canEditTransactions)
+                    .filter((item) => item.href !== "/imports/mercury" || permissions.canEditTransactions)
+                    .map((item) => {
                     const Icon = item.icon;
                     const active = isActive(pathname, item.href);
 
@@ -193,7 +196,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <BrandMark size="sm" />
             </Link>
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => item.href !== "/transactions/new" || permissions.canEditTransactions)
+              .filter((item) => item.href !== "/imports/mercury" || permissions.canEditTransactions)
+              .map((item) => {
               const Icon = item.icon;
               const active = isActive(pathname, item.href);
 

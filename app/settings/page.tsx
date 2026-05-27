@@ -5,6 +5,7 @@ import { AlertTriangle, Database, Download, FileJson, RotateCcw, Save, Trash2, U
 import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { AlertBanner, SectionHeader } from "@/components/ui-primitives";
 import { accountOptions, defaultSettings } from "@/lib/seed-data";
 import { downloadExcel } from "@/lib/export-excel";
@@ -22,6 +23,7 @@ export default function SettingsPage() {
     exportBackup,
     importBackup,
     storageStatus,
+    permissions,
     syncToSupabase,
     loadFromSupabase,
     migrateLocalDataToSupabase,
@@ -56,17 +58,20 @@ export default function SettingsPage() {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!permissions.canManageSettings) return;
     updateSettings(draft);
     setSaved(true);
   }
 
   function confirmClearTransactions() {
+    if (!permissions.canDeleteTransactions) return;
     clearTransactions();
     setClearModalOpen(false);
     setImportStatus(t("clearedTransactions"));
   }
 
   function reset() {
+    if (!permissions.canManageSettings) return;
     if (window.confirm(t("resetDemoDataQuestion"))) {
       resetDemoData();
       setDraft(defaultSettings);
@@ -136,6 +141,10 @@ export default function SettingsPage() {
   async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!permissions.canManageSettings) {
+      event.target.value = "";
+      return;
+    }
 
     try {
       const backup = JSON.parse(await file.text()) as LocalBackup;
@@ -198,96 +207,100 @@ export default function SettingsPage() {
         <section className="surface-card space-y-4 p-5">
           <SectionHeader description={t("companySettingsHelp")} title={t("companyProfile")} />
 
-          <section className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-1">
-              <span className="form-label">{t("language")}</span>
-              <select
-                className="form-input"
-                onChange={(event) => setField("language", event.target.value as AppSettings["language"])}
-                value={draft.language}
-              >
-                <option value="en">{t("english")}</option>
-                <option value="zh">{t("simplifiedChinese")}</option>
-              </select>
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("companyName")}</span>
-              <input
-                className="form-input"
-                onChange={(event) => setField("company_name", event.target.value)}
-                value={draft.company_name}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("businessType")}</span>
-              <input
-                className="form-input"
-                onChange={(event) => setField("entity_type", event.target.value)}
-                value={draft.entity_type}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("taxYear")}</span>
-              <input
-                className="form-input"
-                min="2020"
-                onChange={(event) => setField("tax_year", Number(event.target.value))}
-                type="number"
-                value={draft.tax_year}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("defaultCurrency")}</span>
-              <input
-                className="form-input"
-                onChange={(event) => setField("default_currency", event.target.value.toUpperCase())}
-                value={draft.default_currency}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("defaultAccountName")}</span>
-              <input
-                className="form-input"
-                list="settings-account-options"
-                onChange={(event) => setField("default_account", event.target.value)}
-                value={draft.default_account}
-              />
-              <datalist id="settings-account-options">
-                {accountOptions.map((account) => (
-                  <option key={account} value={account} />
-                ))}
-              </datalist>
-            </label>
-            <label className="space-y-1">
-              <span className="form-label">{t("bookkeepingMethod")}</span>
-              <select
-                className="form-input"
-                onChange={(event) =>
-                  setField("bookkeeping_method", event.target.value as AppSettings["bookkeeping_method"])
-                }
-                value={draft.bookkeeping_method}
-              >
-                <option value="cash">{t("cash")}</option>
-                <option value="accrual">{t("accrual")}</option>
-              </select>
-            </label>
-            <label className="space-y-1 md:col-span-2">
-              <span className="form-label">{t("businessTypeTaxNotes")}</span>
-              <textarea
-                className="form-textarea"
-                onChange={(event) => setField("business_type_tax_notes", event.target.value)}
-                value={draft.business_type_tax_notes}
-              />
-            </label>
-          </section>
+          {!permissions.canManageSettings ? <PermissionNotice detailKey="permissionRequiredOwner" /> : null}
 
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="primary">
-              <Save aria-hidden="true" className="h-4 w-4" />
-              {t("saveSettings")}
-            </Button>
-            {saved ? <Badge tone="green">{t("saved")}</Badge> : null}
-          </div>
+          <fieldset className="space-y-4" disabled={!permissions.canManageSettings}>
+            <section className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-1">
+                <span className="form-label">{t("language")}</span>
+                <select
+                  className="form-input"
+                  onChange={(event) => setField("language", event.target.value as AppSettings["language"])}
+                  value={draft.language}
+                >
+                  <option value="en">{t("english")}</option>
+                  <option value="zh">{t("simplifiedChinese")}</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("companyName")}</span>
+                <input
+                  className="form-input"
+                  onChange={(event) => setField("company_name", event.target.value)}
+                  value={draft.company_name}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("businessType")}</span>
+                <input
+                  className="form-input"
+                  onChange={(event) => setField("entity_type", event.target.value)}
+                  value={draft.entity_type}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("taxYear")}</span>
+                <input
+                  className="form-input"
+                  min="2020"
+                  onChange={(event) => setField("tax_year", Number(event.target.value))}
+                  type="number"
+                  value={draft.tax_year}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("defaultCurrency")}</span>
+                <input
+                  className="form-input"
+                  onChange={(event) => setField("default_currency", event.target.value.toUpperCase())}
+                  value={draft.default_currency}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("defaultAccountName")}</span>
+                <input
+                  className="form-input"
+                  list="settings-account-options"
+                  onChange={(event) => setField("default_account", event.target.value)}
+                  value={draft.default_account}
+                />
+                <datalist id="settings-account-options">
+                  {accountOptions.map((account) => (
+                    <option key={account} value={account} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="space-y-1">
+                <span className="form-label">{t("bookkeepingMethod")}</span>
+                <select
+                  className="form-input"
+                  onChange={(event) =>
+                    setField("bookkeeping_method", event.target.value as AppSettings["bookkeeping_method"])
+                  }
+                  value={draft.bookkeeping_method}
+                >
+                  <option value="cash">{t("cash")}</option>
+                  <option value="accrual">{t("accrual")}</option>
+                </select>
+              </label>
+              <label className="space-y-1 md:col-span-2">
+                <span className="form-label">{t("businessTypeTaxNotes")}</span>
+                <textarea
+                  className="form-textarea"
+                  onChange={(event) => setField("business_type_tax_notes", event.target.value)}
+                  value={draft.business_type_tax_notes}
+                />
+              </label>
+            </section>
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" variant="primary">
+                <Save aria-hidden="true" className="h-4 w-4" />
+                {t("saveSettings")}
+              </Button>
+              {saved ? <Badge tone="green">{t("saved")}</Badge> : null}
+            </div>
+          </fieldset>
         </section>
       </form>
 
@@ -375,7 +388,7 @@ export default function SettingsPage() {
         </section>
 
         <div className="flex flex-wrap gap-2">
-          {!supabaseConnected ? (
+          {!supabaseConnected && permissions.canManageWorkspace ? (
             <Button
               disabled={storageBusy}
               onClick={() => runStorageAction(syncToSupabase, "syncedToSupabase")}
@@ -391,7 +404,7 @@ export default function SettingsPage() {
             <Download aria-hidden="true" className="h-4 w-4" />
             {t("loadFromSupabase")}
           </Button>
-          {!supabaseConnected ? (
+          {!supabaseConnected && permissions.canManageWorkspace ? (
             <Button
               disabled={storageBusy}
               onClick={() => runStorageAction(migrateLocalDataToSupabase, "migratedToSupabase")}
@@ -411,7 +424,7 @@ export default function SettingsPage() {
             <FileJson aria-hidden="true" className="h-4 w-4" />
             {t("exportLocalBackupJson")}
           </Button>
-          <Button onClick={() => fileInputRef.current?.click()}>
+          <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
             {t("importLocalBackupJson")}
           </Button>
@@ -456,7 +469,7 @@ export default function SettingsPage() {
             <FileJson aria-hidden="true" className="h-4 w-4" />
             {t("exportLocalBackupJson")}
           </Button>
-          <Button onClick={() => fileInputRef.current?.click()}>
+          <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
             {t("importLocalBackupJson")}
           </Button>
@@ -467,11 +480,11 @@ export default function SettingsPage() {
             ref={fileInputRef}
             type="file"
           />
-          <Button onClick={() => setClearModalOpen(true)} variant="danger">
+          <Button disabled={!permissions.canDeleteTransactions} onClick={() => setClearModalOpen(true)} variant="danger">
             <Trash2 aria-hidden="true" className="h-4 w-4" />
             {t("clearTransactions")}
           </Button>
-          <Button onClick={reset}>
+          <Button disabled={!permissions.canManageSettings} onClick={reset}>
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
             {t("resetDemoSeedData")}
           </Button>
@@ -493,7 +506,7 @@ export default function SettingsPage() {
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <Button onClick={() => setClearModalOpen(false)}>{t("cancel")}</Button>
-              <Button onClick={confirmClearTransactions} variant="danger">
+              <Button disabled={!permissions.canDeleteTransactions} onClick={confirmClearTransactions} variant="danger">
                 {t("clearTransactions")}
               </Button>
             </div>

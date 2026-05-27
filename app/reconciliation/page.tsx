@@ -7,6 +7,7 @@ import { Badge } from "@/components/badge";
 import { Button } from "@/components/button";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReceiptUploadControl } from "@/components/receipt-upload-control";
 import { TransactionEditModal } from "@/components/transaction-edit-modal";
 import { AlertBanner, FilterBar, SectionHeader } from "@/components/ui-primitives";
@@ -135,6 +136,7 @@ function TransactionIssueRow({
   onOpenTransaction,
   onReceiptLinkChange,
   onResolveReview,
+  readOnly = false,
   showCategorySelect = false,
   showReceiptUpload = false,
   showResolveReview = false,
@@ -161,6 +163,7 @@ function TransactionIssueRow({
     }
   ) => void;
   onResolveReview?: (transaction: Transaction) => void;
+  readOnly?: boolean;
   showCategorySelect?: boolean;
   showReceiptUpload?: boolean;
   showResolveReview?: boolean;
@@ -208,27 +211,28 @@ function TransactionIssueRow({
               {t("openTransaction")}
             </Button>
             {onMarkReconciled && !issue.transaction.reconciled ? (
-              <Button onClick={() => onMarkReconciled(issue.transaction)}>
+              <Button disabled={readOnly} onClick={() => onMarkReconciled(issue.transaction)}>
                 {t("markReconciled")}
               </Button>
             ) : null}
             {onMarkReceiptNotRequired && issue.transaction.receipt_required ? (
-              <Button onClick={() => onMarkReceiptNotRequired(issue.transaction)}>
+              <Button disabled={readOnly} onClick={() => onMarkReceiptNotRequired(issue.transaction)}>
                 {t("markReceiptNotRequired")}
               </Button>
             ) : null}
             {showResolveReview && onResolveReview ? (
-              <Button onClick={() => onResolveReview(issue.transaction)}>
+              <Button disabled={readOnly} onClick={() => onResolveReview(issue.transaction)}>
                 {t("markReviewResolved")}
               </Button>
             ) : null}
-            <Button onClick={() => onAddNote(issue.transaction)}>{t("addNote")}</Button>
+            <Button disabled={readOnly} onClick={() => onAddNote(issue.transaction)}>{t("addNote")}</Button>
           </div>
           {showCategorySelect ? (
             <label className="block space-y-1">
               <span className="form-label">{t("updateCategory")}</span>
               <select
                 className="form-input"
+                disabled={readOnly}
                 onChange={(event) => onCategoryChange(issue.transaction, event.target.value)}
                 value={issue.transaction.category}
               >
@@ -250,6 +254,7 @@ function TransactionIssueRow({
                 }
                 receiptLink={issue.transaction.receipt_link}
                 receiptRequired={issue.transaction.receipt_required}
+                readOnly={readOnly}
                 transactionId={issue.transaction.id}
               />
             </div>
@@ -276,6 +281,7 @@ function DuplicateCandidateRow({
   onDeleteDuplicate,
   onMarkNotDuplicate,
   onOpenTransaction,
+  readOnly = false,
   t
 }: {
   auditEntries: AuditLog[];
@@ -283,6 +289,7 @@ function DuplicateCandidateRow({
   onDeleteDuplicate: (candidate: DuplicateCandidate) => void;
   onMarkNotDuplicate: (candidate: DuplicateCandidate) => void;
   onOpenTransaction: (transaction: Transaction) => void;
+  readOnly?: boolean;
   t: (key: string) => string;
 }) {
   return (
@@ -320,7 +327,7 @@ function DuplicateCandidateRow({
             <p className="mt-1 text-sm text-slate-600">{candidate.second.description}</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button onClick={() => onOpenTransaction(candidate.second)}>{t("openTransaction")}</Button>
-              <Button onClick={() => onDeleteDuplicate(candidate)} variant="danger">
+              <Button disabled={readOnly} onClick={() => onDeleteDuplicate(candidate)} variant="danger">
                 <Trash2 aria-hidden="true" className="h-4 w-4" />
                 {t("deleteDuplicate")}
               </Button>
@@ -329,7 +336,7 @@ function DuplicateCandidateRow({
         </div>
         <ReasonList reasons={candidate.reasonCodes} t={t} />
         <div>
-          <Button onClick={() => onMarkNotDuplicate(candidate)}>{t("markNotDuplicate")}</Button>
+          <Button disabled={readOnly} onClick={() => onMarkNotDuplicate(candidate)}>{t("markNotDuplicate")}</Button>
         </div>
         <details>
           <summary className="cursor-pointer text-sm font-medium text-marine">
@@ -380,6 +387,7 @@ export default function ReconciliationPage() {
     categories,
     deleteTransaction,
     monthlyClosings,
+    permissions,
     settings,
     transactions,
     updateTransaction
@@ -432,6 +440,7 @@ export default function ReconciliationPage() {
     () => new Map(categories.map((item) => [item.name, item])),
     [categories]
   );
+  const reconciliationReadOnly = !permissions.canRunReconciliation;
 
   function promptReasonForTransaction(transaction: Transaction, labelKey: string) {
     return isDateInClosedPeriod(monthlyClosings, transaction.date)
@@ -440,6 +449,8 @@ export default function ReconciliationPage() {
   }
 
   function updateCategory(transaction: Transaction, categoryName: string) {
+    if (reconciliationReadOnly) return;
+
     const reason = promptReasonForTransaction(transaction, "category");
 
     if (reason === null) return;
@@ -472,6 +483,8 @@ export default function ReconciliationPage() {
   }
 
   function addNote(transaction: Transaction) {
+    if (reconciliationReadOnly) return;
+
     const nextNotes = window.prompt(t("editNotePrompt"), transaction.notes);
     if (nextNotes === null) return;
     const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
@@ -491,6 +504,8 @@ export default function ReconciliationPage() {
   }
 
   function markReceiptNotRequired(transaction: Transaction) {
+    if (reconciliationReadOnly) return;
+
     const reason = promptReasonForTransaction(transaction, "markReceiptNotRequired");
 
     if (reason === null) return;
@@ -506,6 +521,8 @@ export default function ReconciliationPage() {
   }
 
   function markReconciled(transaction: Transaction) {
+    if (reconciliationReadOnly) return;
+
     const reason = promptReasonForTransaction(transaction, "markReconciled");
 
     if (reason === null) return;
@@ -521,6 +538,8 @@ export default function ReconciliationPage() {
   }
 
   function markReviewResolved(transaction: Transaction) {
+    if (reconciliationReadOnly) return;
+
     const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
       ? promptRequiredAuditReason(t, t("markReviewResolved"))
       : "";
@@ -556,6 +575,8 @@ export default function ReconciliationPage() {
     receiptLink: string,
     audit?: { action?: "delete_receipt" | "replace_receipt" | "upload_receipt"; reason?: string; source?: "receipt_upload" }
   ) {
+    if (reconciliationReadOnly) return;
+
     const reason = isDateInClosedPeriod(monthlyClosings, transaction.date)
       ? audit?.reason || promptRequiredAuditReason(t, t("receiptLink"))
       : audit?.reason;
@@ -572,6 +593,8 @@ export default function ReconciliationPage() {
   }
 
   function markNotDuplicate(candidate: DuplicateCandidate) {
+    if (reconciliationReadOnly) return;
+
     bulkUpdateTransactions([
       {
         id: candidate.first.id,
@@ -629,6 +652,8 @@ export default function ReconciliationPage() {
   }
 
   function deleteDuplicate(candidate: DuplicateCandidate) {
+    if (reconciliationReadOnly) return;
+
     if (
       window.confirm(
         t("deleteDuplicateQuestion").replace(
@@ -679,6 +704,8 @@ export default function ReconciliationPage() {
       <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-700" />} tone="warning">
         <p>{t("reconciliationCenterHelp")}</p>
       </AlertBanner>
+
+      {reconciliationReadOnly ? <PermissionNotice detailKey="permissionRequiredOwnerAdmin" /> : null}
 
       <FilterBar>
         <SectionHeader description={t("reconciliationFilterHelp")} title={t("reviewScope")} />
@@ -1025,6 +1052,7 @@ export default function ReconciliationPage() {
                   onMarkReceiptNotRequired={markReceiptNotRequired}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
                   onReceiptLinkChange={updateReceiptLink}
+                  readOnly={reconciliationReadOnly}
                   showReceiptUpload
                   t={t}
                   taxLineLabel={taxLineLabel}
@@ -1057,6 +1085,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
                   onResolveReview={markReviewResolved}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   showResolveReview
                   t={t}
@@ -1089,6 +1118,7 @@ export default function ReconciliationPage() {
                   onAddNote={addNote}
                   onCategoryChange={updateCategory}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   t={t}
                   taxLineLabel={taxLineLabel}
@@ -1121,6 +1151,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onMarkReconciled={markReconciled}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   t={t}
                   taxLineLabel={taxLineLabel}
                 />
@@ -1151,6 +1182,7 @@ export default function ReconciliationPage() {
                   onDeleteDuplicate={deleteDuplicate}
                   onMarkNotDuplicate={markNotDuplicate}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   t={t}
                 />
               ))}
@@ -1181,6 +1213,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onMarkReconciled={markReconciled}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   t={t}
                   taxLineLabel={taxLineLabel}
@@ -1214,6 +1247,7 @@ export default function ReconciliationPage() {
                   onMarkReceiptNotRequired={markReceiptNotRequired}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
                   onReceiptLinkChange={updateReceiptLink}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   showReceiptUpload
                   t={t}
@@ -1247,6 +1281,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onMarkReconciled={markReconciled}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   t={t}
                   taxLineLabel={taxLineLabel}
@@ -1279,6 +1314,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onMarkReconciled={markReconciled}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   t={t}
                   taxLineLabel={taxLineLabel}
@@ -1311,6 +1347,7 @@ export default function ReconciliationPage() {
                   onCategoryChange={updateCategory}
                   onMarkReconciled={markReconciled}
                   onOpenTransaction={(transaction) => setEditingTransactionId(transaction.id)}
+                  readOnly={reconciliationReadOnly}
                   showCategorySelect
                   t={t}
                   taxLineLabel={taxLineLabel}

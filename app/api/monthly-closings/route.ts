@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { logPermissionDenied } from "@/lib/permission-audit-server";
+import {
+  canCloseMonth,
+  canReopenMonth,
+  permissionDeniedMessage
+} from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   closeSupabaseMonthlyClosing,
@@ -50,6 +56,18 @@ function badRequest(message: string) {
     },
     { status: 400 }
   );
+}
+
+async function forbidden(
+  auth: Awaited<ReturnType<typeof getAuthenticatedContext>>,
+  attemptedAction: string,
+  entityId = ""
+) {
+  if (auth) {
+    await logPermissionDenied(auth, attemptedAction, "reconciliation", entityId);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
 }
 
 function supabaseError(error: unknown) {
@@ -207,6 +225,10 @@ export async function POST(request: NextRequest) {
     const month = readInteger(body, "month", 1, 12);
 
     if (action === "close") {
+      if (!canCloseMonth(auth.membership)) {
+        return forbidden(auth, "monthly_closing.close", `${year}-${month}`);
+      }
+
       const summary = readSummary(body);
       const result = await closeSupabaseMonthlyClosing(
         year,
@@ -231,6 +253,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "reopen") {
+      if (!canReopenMonth(auth.membership)) {
+        return forbidden(auth, "monthly_closing.reopen", `${year}-${month}`);
+      }
+
       const result = await reopenSupabaseMonthlyClosing(year, month, readReason(body), auth.workspace.id);
 
       return ok({
@@ -241,6 +267,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "update_summary") {
+      if (!canCloseMonth(auth.membership)) {
+        return forbidden(auth, "monthly_closing.update_summary", `${year}-${month}`);
+      }
+
       const result = await updateSupabaseMonthlyClosingSummary(year, month, readSummary(body), auth.workspace.id);
 
       return ok({

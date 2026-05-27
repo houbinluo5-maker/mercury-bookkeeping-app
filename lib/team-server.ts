@@ -1,6 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createAuditEntry } from "@/lib/audit";
 import { sendWorkspaceInvitationEmail } from "@/lib/invite-email-server";
+import {
+  PermissionError,
+  canInviteRole,
+  canManageMembers,
+  permissionsForRole
+} from "@/lib/permissions";
 import { getSupabaseConfig } from "@/lib/supabase-server";
 import {
   normalizeIdentityEmail,
@@ -96,31 +102,22 @@ function requireAccountContext(auth: AuthWorkspaceContext) {
 }
 
 function accessForRole(role: WorkspaceRole): TeamAccess {
-  if (role === "owner") {
-    return {
-      canInviteRoles: ["admin", "viewer", "cpa"],
-      canManageMembers: true
-    };
-  }
-
-  if (role === "admin") {
-    return {
-      canInviteRoles: ["viewer", "cpa"],
-      canManageMembers: false
-    };
-  }
+  const permissions = permissionsForRole(role);
+  const inviteRoles = (["admin", "viewer", "cpa"] as const).filter((nextRole) =>
+    canInviteRole(role, nextRole)
+  );
 
   return {
-    canInviteRoles: [],
-    canManageMembers: false
+    canInviteRoles: inviteRoles,
+    canManageMembers: permissions.canManageMembers
   };
 }
 
 function requireOwner(auth: AuthWorkspaceContext) {
   const { membership, user } = requireAccountContext(auth);
 
-  if (membership.role !== "owner") {
-    throw new Error("Only workspace owners can manage members.");
+  if (!canManageMembers(membership)) {
+    throw new PermissionError();
   }
 
   return { membership, user };
@@ -277,7 +274,7 @@ export async function createTeamInvitation(
   const normalizedEmail = normalizeIdentityEmail(email);
 
   if (!access.canInviteRoles.includes(role)) {
-    throw new Error("You do not have permission to invite that role.");
+    throw new PermissionError();
   }
 
   if (!normalizedEmail || !normalizedEmail.includes("@")) {
