@@ -5,10 +5,46 @@ import {
   getExpectedAuthToken,
   isAdminPasswordConfigured
 } from "@/lib/auth";
+import { createCanonicalHostRedirect, canonicalUrl } from "@/lib/canonical-host";
+import { createLogoutResponse } from "@/lib/logout-response";
+
+const protectedPathPrefixes = [
+  "/account",
+  "/accounts",
+  "/audit",
+  "/closing",
+  "/imports",
+  "/reconciliation",
+  "/receipts",
+  "/reports",
+  "/settings",
+  "/team",
+  "/transactions"
+];
+
+function isProtectedPath(pathname: string) {
+  return pathname === "/" || protectedPathPrefixes.some((prefix) => (
+    pathname === prefix || pathname.startsWith(`${prefix}/`)
+  ));
+}
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const loginUrl = new URL("/login", request.url);
+  const canonicalRedirect = createCanonicalHostRedirect(request);
+
+  if (canonicalRedirect) {
+    if (pathname === "/logout" || pathname === "/api/auth/logout") {
+      return createLogoutResponse(request);
+    }
+
+    return canonicalRedirect;
+  }
+
+  if (!isProtectedPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  const loginUrl = canonicalUrl("/login", request);
 
   const supabaseToken = request.cookies.get(SUPABASE_ACCESS_TOKEN_COOKIE)?.value;
 
@@ -30,17 +66,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/",
-    "/account/:path*",
-    "/accounts/:path*",
-    "/audit/:path*",
-    "/closing/:path*",
-    "/imports/:path*",
-    "/reconciliation/:path*",
-    "/receipts/:path*",
-    "/reports/:path*",
-    "/settings/:path*",
-    "/team/:path*",
-    "/transactions/:path*"
+    "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"
   ]
 };

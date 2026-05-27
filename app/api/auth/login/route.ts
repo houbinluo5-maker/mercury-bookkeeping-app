@@ -8,6 +8,7 @@ import {
   isSafeRedirectPath
 } from "@/lib/auth";
 import { setSupabaseSessionCookies } from "@/lib/auth-cookies";
+import { canonicalUrl } from "@/lib/canonical-host";
 import { ensureProfileAndWorkspace, signInWithEmail } from "@/lib/supabase-auth-server";
 
 export async function POST(request: NextRequest) {
@@ -17,14 +18,14 @@ export async function POST(request: NextRequest) {
   const nextPath = String(formData.get("next") ?? "/");
   const legacy = String(formData.get("legacy") ?? "") === "1";
   const adminPassword = getAdminPassword();
-  const loginUrl = new URL("/login", request.url);
+  const loginUrl = canonicalUrl("/login", request);
 
   if (email && !legacy) {
     try {
       const session = await signInWithEmail(email, submittedPassword);
       const { workspace } = await ensureProfileAndWorkspace(session.user);
       const response = NextResponse.redirect(
-        new URL(isSafeRedirectPath(nextPath) ? nextPath : "/", request.url),
+        canonicalUrl(isSafeRedirectPath(nextPath) ? nextPath : "/", request),
         { status: 303 }
       );
 
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(loginUrl, { status: 303 });
   }
 
-  const redirectUrl = new URL(isSafeRedirectPath(nextPath) ? nextPath : "/", request.url);
+  const redirectUrl = canonicalUrl(isSafeRedirectPath(nextPath) ? nextPath : "/", request);
   const response = NextResponse.redirect(redirectUrl, { status: 303 });
 
   response.cookies.set({
