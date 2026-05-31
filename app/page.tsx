@@ -17,7 +17,7 @@ import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 export default function DashboardPage() {
-  const { monthlyClosings, permissions, transactions, settings } = useBookkeeping();
+  const { monthlyClosings, permissions, recordExportAudit, transactions, settings } = useBookkeeping();
   const { t } = useI18n();
   const yearTransactions = filterByYear(transactions, settings.tax_year);
   const stats = getDashboardStats(yearTransactions);
@@ -39,16 +39,33 @@ export default function DashboardPage() {
       needsReviewCount * 6 -
       reopenedCount * 12
   );
+  const dashboardExportFileName = `${settings.tax_year}-bookkeeping.xls`;
+
+  async function exportDashboardReport() {
+    const allowed = await recordExportAudit({
+      entityId: String(settings.tax_year),
+      entityType: "transaction",
+      exportType: "dashboard_report",
+      fileName: dashboardExportFileName,
+      reportPeriod: String(settings.tax_year)
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(yearTransactions, dashboardExportFileName);
+  }
 
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
           <>
-            <Button onClick={() => downloadExcel(yearTransactions, `${settings.tax_year}-bookkeeping.xls`)}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("export")}
-            </Button>
+            {permissions.canExportReports ? (
+              <Button onClick={() => void exportDashboardReport()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("export")}
+              </Button>
+            ) : null}
             {permissions.canEditTransactions ? (
               <Link className={buttonClassName("primary")} href="/transactions/new">
                 <PlusCircle aria-hidden="true" className="h-4 w-4" />
@@ -61,6 +78,10 @@ export default function DashboardPage() {
         description={t("dashboardSaasDescription")}
         title={t("dashboard")}
       />
+
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label={t("revenue")} value={formatCurrency(stats.revenue)} tone="green" />

@@ -37,7 +37,13 @@ export type AuditAction =
   | "invitation_revoked"
   | "member_removed"
   | "member_role_changed"
-  | "permission_denied";
+  | "permission_denied"
+  | "report_exported"
+  | "tax_package_exported"
+  | "transactions_exported"
+  | "receipts_exported"
+  | "workspace_backup_exported"
+  | "export_denied";
 
 export type WorkspaceRole = "owner" | "admin" | "viewer" | "cpa" | "bookkeeper";
 export type WorkspaceMemberStatus = "active" | "invited" | "revoked";

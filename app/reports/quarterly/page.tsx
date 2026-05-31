@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/button";
 import { QuarterSelect, YearSelect } from "@/components/period-selectors";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReportSummary } from "@/components/report-summary";
 import { ReportTable } from "@/components/report-table";
 import { TransactionsTable } from "@/components/transactions-table";
@@ -29,7 +30,7 @@ function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transacti
 }
 
 export default function QuarterlyReportPage() {
-  const { transactions } = useBookkeeping();
+  const { permissions, recordExportAudit, transactions } = useBookkeeping();
   const { t } = useI18n();
   const initial = latestPeriod(transactions);
   const [year, setYear] = useState(initial.year);
@@ -41,6 +42,22 @@ export default function QuarterlyReportPage() {
   );
   const summary = summarizeTransactions(reportTransactions);
   const rows = groupByCategory(reportTransactions);
+  const reportPeriod = `${year}-Q${quarter}`;
+  const exportFileName = `${year}-q${quarter}-report.xls`;
+
+  async function exportQuarterlyReport() {
+    const allowed = await recordExportAudit({
+      entityId: reportPeriod,
+      entityType: "transaction",
+      exportType: "quarterly_report",
+      fileName: exportFileName,
+      reportPeriod
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(reportTransactions, exportFileName);
+  }
 
   return (
     <div className="space-y-6">
@@ -49,15 +66,20 @@ export default function QuarterlyReportPage() {
           <>
             <YearSelect onChange={setYear} value={year} years={years} />
             <QuarterSelect onChange={setQuarter} value={quarter} />
-            <Button onClick={() => downloadExcel(reportTransactions, `${year}-q${quarter}-report.xls`)}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("export")}
-            </Button>
+            {permissions.canExportReports ? (
+              <Button onClick={() => void exportQuarterlyReport()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("export")}
+              </Button>
+            ) : null}
           </>
         }
         eyebrow={`Q${quarter} ${year}`}
         title={t("quarterlyReport")}
       />
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
       <ReportSummary summary={summary} />
       <ReportTable rows={rows} />
       <section className="space-y-3">

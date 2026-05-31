@@ -12,9 +12,13 @@ export type WorkspacePermissions = {
   canCloseMonth: boolean;
   canDeleteReceipts: boolean;
   canDeleteTransactions: boolean;
+  canExportFullBackup: boolean;
+  canExportReceipts: boolean;
   canEditTransactions: boolean;
   canExportReports: boolean;
   canExportTaxPackage: boolean;
+  canExportTransactions: boolean;
+  canExportWorkspaceArchive: boolean;
   canInviteMembers: boolean;
   canManageMembers: boolean;
   canManageSettings: boolean;
@@ -61,14 +65,19 @@ export function permissionsForRole(
   const operational = owner || admin || bookkeeper;
   const viewOnly = role === "viewer" || role === "cpa";
   const active = operational || viewOnly;
+  const canExportOperational = owner || admin || bookkeeper || role === "cpa";
 
   return {
     canCloseMonth: operational,
     canDeleteReceipts: operational,
     canDeleteTransactions: operational,
     canEditTransactions: operational,
-    canExportReports: active,
-    canExportTaxPackage: active,
+    canExportFullBackup: owner,
+    canExportReceipts: canExportOperational,
+    canExportReports: canExportOperational,
+    canExportTaxPackage: owner || admin || role === "cpa",
+    canExportTransactions: canExportOperational,
+    canExportWorkspaceArchive: owner,
     canInviteMembers: owner || admin,
     canManageMembers: owner,
     canManageSettings: owner,
@@ -137,6 +146,22 @@ export function canViewTaxPackage(subject: PermissionSubject) {
 
 export function canExportTaxPackage(subject: PermissionSubject) {
   return permissionsForRole(subject).canExportTaxPackage;
+}
+
+export function canExportTransactions(subject: PermissionSubject) {
+  return permissionsForRole(subject).canExportTransactions;
+}
+
+export function canExportReceipts(subject: PermissionSubject) {
+  return permissionsForRole(subject).canExportReceipts;
+}
+
+export function canExportFullBackup(subject: PermissionSubject) {
+  return permissionsForRole(subject).canExportFullBackup;
+}
+
+export function canExportWorkspaceArchive(subject: PermissionSubject) {
+  return permissionsForRole(subject).canExportWorkspaceArchive;
 }
 
 export function canViewAuditTrail(subject: PermissionSubject) {

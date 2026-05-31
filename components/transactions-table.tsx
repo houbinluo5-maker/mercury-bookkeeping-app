@@ -22,7 +22,7 @@ export function TransactionsTable({
   transactions: Transaction[];
   compact?: boolean;
 }) {
-  const { categories, monthlyClosings, permissions } = useBookkeeping();
+  const { categories, monthlyClosings, permissions, recordExportAudit } = useBookkeeping();
   const { categoryLabel, t, taxLineLabel } = useI18n();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -61,6 +61,21 @@ export function TransactionsTable({
 
   const editingTransaction =
     transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
+
+  async function exportTransactions() {
+    const fileName = "bookkeeping-transactions.xls";
+    const allowed = await recordExportAudit({
+      entityId: "transactions",
+      entityType: "transaction",
+      exportType: "transaction_csv",
+      fileName,
+      reportPeriod: "filtered"
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(filtered, fileName);
+  }
 
   function StatusBadges({ transaction }: { transaction: Transaction }) {
     return (
@@ -124,10 +139,12 @@ export function TransactionsTable({
             </select>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => downloadExcel(filtered, "bookkeeping-transactions.xls")}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("export")}
-            </Button>
+            {permissions.canExportTransactions ? (
+              <Button onClick={() => void exportTransactions()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("export")}
+              </Button>
+            ) : null}
             {permissions.canEditTransactions ? (
               <Link className={buttonClassName("primary")} href="/transactions/new">
                 <PlusCircle aria-hidden="true" className="h-4 w-4" />
@@ -140,6 +157,9 @@ export function TransactionsTable({
       ) : null}
 
       {!compact && !permissions.canEditTransactions ? <PermissionNotice /> : null}
+      {!compact && !permissions.canExportTransactions ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       {!compact ? (
         <div className="space-y-3 md:hidden">

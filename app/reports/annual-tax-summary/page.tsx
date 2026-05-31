@@ -5,6 +5,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/button";
 import { YearSelect } from "@/components/period-selectors";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReportSummary } from "@/components/report-summary";
 import { ReportTable } from "@/components/report-table";
 import {
@@ -20,7 +21,7 @@ import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
 
 export default function AnnualTaxSummaryPage() {
-  const { transactions, settings } = useBookkeeping();
+  const { permissions, recordExportAudit, transactions, settings } = useBookkeeping();
   const { t } = useI18n();
   const years = useMemo(() => getAvailableYears(transactions), [transactions]);
   const [year, setYear] = useState(settings.tax_year);
@@ -28,6 +29,21 @@ export default function AnnualTaxSummaryPage() {
   const summary = summarizeTransactions(reportTransactions);
   const taxRows = groupByTaxLine(reportTransactions);
   const categoryRows = groupByCategory(reportTransactions);
+  const exportFileName = `${year}-annual-tax-summary.xls`;
+
+  async function exportAnnualTaxSummary() {
+    const allowed = await recordExportAudit({
+      entityId: String(year),
+      entityType: "transaction",
+      exportType: "annual_tax_summary",
+      fileName: exportFileName,
+      reportPeriod: String(year)
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(reportTransactions, exportFileName);
+  }
 
   return (
     <div className="space-y-6">
@@ -35,15 +51,20 @@ export default function AnnualTaxSummaryPage() {
         actions={
           <>
             <YearSelect onChange={setYear} value={year} years={years} />
-            <Button onClick={() => downloadExcel(reportTransactions, `${year}-annual-tax-summary.xls`)}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("export")}
-            </Button>
+            {permissions.canExportReports ? (
+              <Button onClick={() => void exportAnnualTaxSummary()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("export")}
+              </Button>
+            ) : null}
           </>
         }
         eyebrow={`${settings.entity_type} ${t("taxYear")} ${year}`}
         title={t("annualTaxSummary")}
       />
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
       <ReportSummary summary={summary} />
       <section className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg border border-line bg-white p-4 shadow-soft">

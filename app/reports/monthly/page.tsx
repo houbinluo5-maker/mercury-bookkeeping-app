@@ -6,6 +6,7 @@ import { Button } from "@/components/button";
 import { Badge } from "@/components/badge";
 import { MonthSelect, YearSelect } from "@/components/period-selectors";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReportSummary } from "@/components/report-summary";
 import { ReportTable } from "@/components/report-table";
 import { TransactionsTable } from "@/components/transactions-table";
@@ -31,7 +32,7 @@ function latestPeriod(transactions: ReturnType<typeof useBookkeeping>["transacti
 }
 
 export default function MonthlyReportPage() {
-  const { monthlyClosings, transactions } = useBookkeeping();
+  const { monthlyClosings, permissions, recordExportAudit, transactions } = useBookkeeping();
   const { monthLabel, t } = useI18n();
   const initial = latestPeriod(transactions);
   const [year, setYear] = useState(initial.year);
@@ -44,6 +45,22 @@ export default function MonthlyReportPage() {
   const summary = summarizeTransactions(reportTransactions);
   const rows = groupByCategory(reportTransactions);
   const closing = monthlyClosings.find((item) => item.id === monthlyClosingId(year, month));
+  const reportPeriod = `${year}-${String(month).padStart(2, "0")}`;
+  const exportFileName = `${year}-${month}-monthly-report.xls`;
+
+  async function exportMonthlyReport() {
+    const allowed = await recordExportAudit({
+      entityId: reportPeriod,
+      entityType: "transaction",
+      exportType: "monthly_report",
+      fileName: exportFileName,
+      reportPeriod
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(reportTransactions, exportFileName);
+  }
 
   return (
     <div className="space-y-6">
@@ -52,15 +69,20 @@ export default function MonthlyReportPage() {
           <>
             <YearSelect onChange={setYear} value={year} years={years} />
             <MonthSelect onChange={setMonth} value={month} />
-            <Button onClick={() => downloadExcel(reportTransactions, `${year}-${month}-monthly-report.xls`)}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("export")}
-            </Button>
+            {permissions.canExportReports ? (
+              <Button onClick={() => void exportMonthlyReport()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("export")}
+              </Button>
+            ) : null}
           </>
         }
         eyebrow={`${monthLabel(month - 1)} ${year}`}
         title={t("monthlyReport")}
       />
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
       <ReportSummary summary={summary} />
       {closing ? (
         <section className="rounded-lg border border-line bg-white p-4 shadow-soft">

@@ -40,7 +40,13 @@ export const auditActions: AuditAction[] = [
   "invitation_revoked",
   "member_removed",
   "member_role_changed",
-  "permission_denied"
+  "permission_denied",
+  "report_exported",
+  "tax_package_exported",
+  "transactions_exported",
+  "receipts_exported",
+  "workspace_backup_exported",
+  "export_denied"
 ];
 
 export const auditSources: AuditSource[] = [
@@ -154,7 +160,10 @@ function normalizeAuditLog(log: Partial<AuditLog>): AuditLog {
     reason: String(log.reason ?? ""),
     created_at: log.created_at || new Date().toISOString(),
     actor: log.actor ?? "admin",
-    source: log.source ?? "manual"
+    source: log.source ?? "manual",
+    actor_email: log.actor_email,
+    actor_user_id: log.actor_user_id,
+    workspace_id: log.workspace_id
   };
 }
 

@@ -70,6 +70,7 @@ export default function ClosingPage() {
     closeMonth,
     monthlyClosings,
     permissions,
+    recordExportAudit,
     reopenMonth,
     settings,
     transactions
@@ -161,7 +162,56 @@ export default function ClosingPage() {
     await reopenMonth(card.closing.year, card.closing.month, response);
   }
 
-  function exportClosedPeriodChanges() {
+  async function exportMonthlyClosingSummary() {
+    const fileName = `${taxYear}-monthly-closing-summary.csv`;
+    const allowed = await recordExportAudit({
+      entityId: String(taxYear),
+      entityType: "reconciliation",
+      exportType: "monthly_closing_summary",
+      fileName,
+      reportPeriod: String(taxYear)
+    });
+
+    if (!allowed) return;
+
+    downloadCsv(
+      [
+        "Year",
+        "Month",
+        "Status",
+        "Readiness Score",
+        "Total Transactions",
+        "Revenue",
+        "Expenses",
+        "Net Income",
+        "Missing Receipts",
+        "Needs Review",
+        "Uncategorized",
+        "Unreconciled",
+        "Possible Duplicates",
+        "Close Reason",
+        "Reopen Reason",
+        "Closed At",
+        "Reopened At",
+        "Related Audit Log Count"
+      ],
+      toCsvRows(cards),
+      fileName
+    );
+  }
+
+  async function exportClosedPeriodChanges() {
+    const fileName = `${taxYear}-closed-period-changes.csv`;
+    const allowed = await recordExportAudit({
+      entityId: String(taxYear),
+      entityType: "reconciliation",
+      exportType: "closed_period_changes",
+      fileName,
+      reportPeriod: String(taxYear)
+    });
+
+    if (!allowed) return;
+
     const rows = auditLogs
       .filter((entry) =>
         cards.some(
@@ -187,7 +237,29 @@ export default function ClosingPage() {
     downloadCsv(
       ["Timestamp", "Entity Type", "Entity ID", "Action", "Field", "Old Value", "New Value", "Reason", "Actor", "Source"],
       rows,
-      `${taxYear}-closed-period-changes.csv`
+      fileName
+    );
+  }
+
+  async function exportClosingChecklist(card: MonthlyClosingCard) {
+    const fileName = `${card.closing.year}-${card.closing.month}-closing-checklist.csv`;
+    const allowed = await recordExportAudit({
+      entityId: card.closing.id,
+      entityType: "reconciliation",
+      exportType: "monthly_closing_checklist",
+      fileName,
+      reportPeriod: `${card.closing.year}-${String(card.closing.month).padStart(2, "0")}`
+    });
+
+    if (!allowed) return;
+
+    downloadCsv(
+      ["Checklist Item", "Status"],
+      checklistItems.map(([key]) => [
+        t(key),
+        Boolean(card.closing.summary_json.checklist?.[key]) ? "Yes" : "No"
+      ]),
+      fileName
     );
   }
 
@@ -197,37 +269,18 @@ export default function ClosingPage() {
         actions={
           <>
             <YearSelect onChange={setTaxYear} value={taxYear} years={years} />
-            <Button onClick={() => downloadCsv(
-              [
-                "Year",
-                "Month",
-                "Status",
-                "Readiness Score",
-                "Total Transactions",
-                "Revenue",
-                "Expenses",
-                "Net Income",
-                "Missing Receipts",
-                "Needs Review",
-                "Uncategorized",
-                "Unreconciled",
-                "Possible Duplicates",
-                "Close Reason",
-                "Reopen Reason",
-                "Closed At",
-                "Reopened At",
-                "Related Audit Log Count"
-              ],
-              toCsvRows(cards),
-              `${taxYear}-monthly-closing-summary.csv`
-            )}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("monthlyClosingSummaryCsv")}
-            </Button>
-            <Button onClick={exportClosedPeriodChanges}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("closedPeriodChangesCsv")}
-            </Button>
+            {permissions.canExportReports ? (
+              <>
+                <Button onClick={() => void exportMonthlyClosingSummary()}>
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {t("monthlyClosingSummaryCsv")}
+                </Button>
+                <Button onClick={() => void exportClosedPeriodChanges()}>
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {t("closedPeriodChangesCsv")}
+                </Button>
+              </>
+            ) : null}
           </>
         }
         eyebrow={`${settings.company_name} - ${taxYear}`}
@@ -240,6 +293,9 @@ export default function ClosingPage() {
 
       {!permissions.canCloseMonth && !permissions.canReopenMonth ? (
         <PermissionNotice detailKey="permissionRequiredOwnerAdmin" />
+      ) : null}
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
@@ -353,17 +409,12 @@ export default function ClosingPage() {
                   {t("closeMonth")}
                 </Button>
               ) : null}
-              <Button onClick={() => downloadCsv(
-                ["Checklist Item", "Status"],
-                checklistItems.map(([key]) => [
-                  t(key),
-                  Boolean(card.closing.summary_json.checklist?.[key]) ? "Yes" : "No"
-                ]),
-                `${card.closing.year}-${card.closing.month}-closing-checklist.csv`
-              )}>
-                <Download aria-hidden="true" className="h-4 w-4" />
-                {t("monthlyClosingChecklistCsv")}
-              </Button>
+              {permissions.canExportReports ? (
+                <Button onClick={() => void exportClosingChecklist(card)}>
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {t("monthlyClosingChecklistCsv")}
+                </Button>
+              ) : null}
             </div>
           </article>
         ))}

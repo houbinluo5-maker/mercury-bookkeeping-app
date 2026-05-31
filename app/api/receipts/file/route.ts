@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  canExportLedgerData,
+  exportPermissionDeniedMessage,
+  type ExportAuditDetails
+} from "@/lib/export-audit";
+import { logExportAudit } from "@/lib/export-audit-server";
 import { isManagedReceiptPath, RECEIPT_BUCKET_NAME } from "@/lib/receipt-files";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import { getSupabaseConfig, isSupabaseConfigured } from "@/lib/supabase-server";
@@ -34,6 +40,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Receipt path does not belong to this workspace." }, { status: 403 });
   }
 
+  const auditDetails = {
+    entityId: path,
+    entityType: "receipt",
+    exportType: "receipt_export",
+    fileName: fileNameFromPath(path)
+  } satisfies ExportAuditDetails;
+
+  if (!canExportLedgerData(auth.membership, auditDetails.exportType)) {
+    await logExportAudit(auth, auditDetails, "denied");
+
+    return NextResponse.json({ error: exportPermissionDeniedMessage }, { status: 403 });
+  }
+
   const config = getSupabaseConfig();
 
   if (!config) {
@@ -60,6 +79,8 @@ export async function GET(request: NextRequest) {
       { status: response.status || 500 }
     );
   }
+
+  await logExportAudit(auth, auditDetails, "success");
 
   return new Response(response.body, {
     headers: {

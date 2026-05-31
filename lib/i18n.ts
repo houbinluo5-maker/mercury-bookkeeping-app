@@ -203,6 +203,8 @@ const translations: Record<Language, Record<string, string>> = {
     passwordNotAccepted: "Password was not accepted.",
     password: "Password",
     askOwnerForEditAccess: "Ask the workspace owner for edit access.",
+    askOwnerForExportAccess: "Ask the workspace owner for export access.",
+    exportRestrictedForRole: "Export is restricted for your role.",
     permissionRequiredOwner: "Permission required: Owner.",
     permissionRequiredOwnerAdmin: "Permission required: Owner or Admin.",
     readOnlyMode: "Read-only mode",
@@ -653,7 +655,13 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.invitation_revoked": "Invitation revoked",
     "auditAction.member_removed": "Member removed",
     "auditAction.member_role_changed": "Member role changed",
-    "auditAction.permission_denied": "Permission denied"
+    "auditAction.permission_denied": "Permission denied",
+    "auditAction.report_exported": "Report exported",
+    "auditAction.tax_package_exported": "Tax package exported",
+    "auditAction.transactions_exported": "Transactions exported",
+    "auditAction.receipts_exported": "Receipts exported",
+    "auditAction.workspace_backup_exported": "Workspace backup exported",
+    "auditAction.export_denied": "Export denied"
   },
   zh: {
     allWorkspaces: "所有工作区",
@@ -804,6 +812,8 @@ const translations: Record<Language, Record<string, string>> = {
     parsedFromNaturalLanguage: "已从自然语言解析。",
     passwordNotAccepted: "密码不正确。",
     askOwnerForEditAccess: "请向工作区所有者申请编辑权限。",
+    askOwnerForExportAccess: "Ask the workspace owner for export access.",
+    exportRestrictedForRole: "Export is restricted for your role.",
     permissionRequiredOwner: "需要权限：所有者。",
     permissionRequiredOwnerAdmin: "需要权限：所有者或管理员。",
     readOnlyMode: "只读模式",
@@ -1200,7 +1210,13 @@ const translations: Record<Language, Record<string, string>> = {
     "auditAction.invitation_revoked": "邀请已撤销",
     "auditAction.member_removed": "成员已移除",
     "auditAction.member_role_changed": "成员角色已变更",
-    "auditAction.permission_denied": "权限被拒绝"
+    "auditAction.permission_denied": "权限被拒绝",
+    "auditAction.report_exported": "Report exported",
+    "auditAction.tax_package_exported": "Tax package exported",
+    "auditAction.transactions_exported": "Transactions exported",
+    "auditAction.receipts_exported": "Receipts exported",
+    "auditAction.workspace_backup_exported": "Workspace backup exported",
+    "auditAction.export_denied": "Export denied"
   }
 };
 

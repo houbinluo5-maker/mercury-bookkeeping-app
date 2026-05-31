@@ -7,6 +7,7 @@ import { Badge } from "@/components/badge";
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { YearSelect } from "@/components/period-selectors";
+import { PermissionNotice } from "@/components/permission-notice";
 import { ReconciliationLink } from "@/components/reconciliation-link";
 import { AlertBanner, FilterBar, SectionHeader } from "@/components/ui-primitives";
 import { getAvailableYears } from "@/lib/calculations";
@@ -24,6 +25,7 @@ import {
   reviewQueueHeaders,
   transactionLedgerHeaders,
   type NeedsReviewFilter,
+  type TaxPackageRow,
   type ReceiptStatusFilter,
   type ReconciliationStatusFilter
 } from "@/lib/tax-package";
@@ -41,7 +43,15 @@ function filePrefix(year: number, startDate: string, endDate: string) {
 }
 
 export default function TaxPackagePage() {
-  const { auditLogs, categories, monthlyClosings, settings, transactions } = useBookkeeping();
+  const {
+    auditLogs,
+    categories,
+    monthlyClosings,
+    permissions,
+    recordExportAudit,
+    settings,
+    transactions
+  } = useBookkeeping();
   const { categoryLabel, t } = useI18n();
   const years = useMemo(
     () => Array.from(new Set([...getAvailableYears(transactions), settings.tax_year])).sort((a, b) => b - a),
@@ -165,22 +175,61 @@ export default function TaxPackagePage() {
     );
   }
 
+  async function exportTaxPackageWorkbook() {
+    const fileName = `${prefix}-workbook.xls`;
+    const allowed = await recordExportAudit({
+      entityId: String(taxYear),
+      entityType: "transaction",
+      exportType: "tax_package_workbook",
+      fileName,
+      reportPeriod: `${startDate} to ${endDate}`
+    });
+
+    if (!allowed) return;
+
+    downloadTaxPackageWorkbook(taxPackage, fileName);
+  }
+
+  async function exportTaxPackageCsv(
+    headers: string[],
+    rows: TaxPackageRow[],
+    fileName: string,
+    exportType: "receipt_export" | "tax_package_csv" | "transaction_csv"
+  ) {
+    const allowed = await recordExportAudit({
+      entityId: String(taxYear),
+      entityType: exportType === "receipt_export" ? "receipt" : "transaction",
+      exportType,
+      fileName,
+      reportPeriod: `${startDate} to ${endDate}`
+    });
+
+    if (!allowed) return;
+
+    downloadCsv(headers, rows, fileName);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
-          <Button
-            onClick={() => downloadTaxPackageWorkbook(taxPackage, `${prefix}-workbook.xls`)}
-            variant="primary"
-          >
-            <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />
-            {t("exportTaxPackageWorkbook")}
-          </Button>
+          permissions.canExportTaxPackage ? (
+            <Button onClick={() => void exportTaxPackageWorkbook()} variant="primary">
+              <FileSpreadsheet aria-hidden="true" className="h-4 w-4" />
+              {t("exportTaxPackageWorkbook")}
+            </Button>
+          ) : null
         }
         eyebrow={`${settings.entity_type} ${t("taxYear")} ${taxYear}`}
         description={t("taxPackagePageDescription")}
         title={t("taxPackage")}
       />
+
+      {!permissions.canExportTaxPackage &&
+      !permissions.canExportTransactions &&
+      !permissions.canExportReceipts ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-5 w-5 text-amber-700" />} tone="warning">
         <p>{t("taxPackageWarning")}</p>
@@ -309,42 +358,128 @@ export default function TaxPackagePage() {
           <p className="section-subtitle">{t("taxPackageExportsHelp")}</p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <Button onClick={() => downloadCsv(transactionLedgerHeaders, taxPackage.transactionRows, `${prefix}-ledger.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportFullLedgerCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(categorySummaryHeaders, taxPackage.categorySummaryRows, `${prefix}-category-summary.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportCategorySummaryCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(pnlHeaders, taxPackage.monthlyPnlRows, `${prefix}-monthly-pnl.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportMonthlyPnlCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(pnlHeaders, taxPackage.quarterlyPnlRows, `${prefix}-quarterly-pnl.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportQuarterlyPnlCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(reviewQueueHeaders, taxPackage.missingReceiptRows, `${prefix}-missing-receipts.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportMissingReceiptsCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(reviewQueueHeaders, taxPackage.needsReviewRows, `${prefix}-needs-review.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportNeedsReviewCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(reviewQueueHeaders, taxPackage.ownerActivityRows, `${prefix}-owner-activity.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportOwnerActivityCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(reviewQueueHeaders, taxPackage.reconciliationIssueRows, `${prefix}-reconciliation-issues.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportReconciliationIssuesCsv")}
-          </Button>
-          <Button onClick={() => downloadCsv(receiptIndexHeaders, taxPackage.receiptIndexRows, `${prefix}-receipt-index.csv`)}>
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportReceiptIndexCsv")}
-          </Button>
+          {permissions.canExportTransactions ? (
+            <Button
+              onClick={() =>
+                void exportTaxPackageCsv(
+                  transactionLedgerHeaders,
+                  taxPackage.transactionRows,
+                  `${prefix}-ledger.csv`,
+                  "transaction_csv"
+                )
+              }
+            >
+              <Download aria-hidden="true" className="h-4 w-4" />
+              {t("exportFullLedgerCsv")}
+            </Button>
+          ) : null}
+          {permissions.canExportTaxPackage ? (
+            <>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    categorySummaryHeaders,
+                    taxPackage.categorySummaryRows,
+                    `${prefix}-category-summary.csv`,
+                    "tax_package_csv"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportCategorySummaryCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(pnlHeaders, taxPackage.monthlyPnlRows, `${prefix}-monthly-pnl.csv`, "tax_package_csv")
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportMonthlyPnlCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    pnlHeaders,
+                    taxPackage.quarterlyPnlRows,
+                    `${prefix}-quarterly-pnl.csv`,
+                    "tax_package_csv"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportQuarterlyPnlCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    reviewQueueHeaders,
+                    taxPackage.needsReviewRows,
+                    `${prefix}-needs-review.csv`,
+                    "tax_package_csv"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportNeedsReviewCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    reviewQueueHeaders,
+                    taxPackage.ownerActivityRows,
+                    `${prefix}-owner-activity.csv`,
+                    "tax_package_csv"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportOwnerActivityCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    reviewQueueHeaders,
+                    taxPackage.reconciliationIssueRows,
+                    `${prefix}-reconciliation-issues.csv`,
+                    "tax_package_csv"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportReconciliationIssuesCsv")}
+              </Button>
+            </>
+          ) : null}
+          {permissions.canExportReceipts ? (
+            <>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    reviewQueueHeaders,
+                    taxPackage.missingReceiptRows,
+                    `${prefix}-missing-receipts.csv`,
+                    "receipt_export"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportMissingReceiptsCsv")}
+              </Button>
+              <Button
+                onClick={() =>
+                  void exportTaxPackageCsv(
+                    receiptIndexHeaders,
+                    taxPackage.receiptIndexRows,
+                    `${prefix}-receipt-index.csv`,
+                    "receipt_export"
+                  )
+                }
+              >
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportReceiptIndexCsv")}
+              </Button>
+            </>
+          ) : null}
         </div>
       </section>
     </div>
