@@ -24,6 +24,7 @@ export default function SettingsPage() {
     importBackup,
     storageStatus,
     permissions,
+    recordExportAudit,
     syncToSupabase,
     loadFromSupabase,
     migrateLocalDataToSupabase,
@@ -79,7 +80,17 @@ export default function SettingsPage() {
     }
   }
 
-  function downloadBackupJson() {
+  async function downloadBackupJson() {
+    const fileName = `bookkeeping-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    const allowed = await recordExportAudit({
+      entityId: "local-backup",
+      entityType: "workspace",
+      exportType: "workspace_backup",
+      fileName
+    });
+
+    if (!allowed) return;
+
     const backup = exportBackup();
     const blob = new Blob([JSON.stringify(backup, null, 2)], {
       type: "application/json;charset=utf-8"
@@ -88,11 +99,25 @@ export default function SettingsPage() {
     const link = document.createElement("a");
 
     link.href = url;
-    link.download = `bookkeeping-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = fileName;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function downloadFullLedgerExcel() {
+    const fileName = "bookkeeping-full-export.xls";
+    const allowed = await recordExportAudit({
+      entityId: "full-ledger",
+      entityType: "workspace",
+      exportType: "workspace_backup",
+      fileName
+    });
+
+    if (!allowed) return;
+
+    downloadExcel(transactions, fileName);
   }
 
   function storageStatusLabel() {
@@ -188,20 +213,28 @@ export default function SettingsPage() {
       <PageHeader
         actions={
           <>
-            <Button onClick={downloadBackupJson}>
-              <FileJson aria-hidden="true" className="h-4 w-4" />
-              {t("backupJson")}
-            </Button>
-            <Button onClick={() => downloadExcel(transactions, "bookkeeping-full-export.xls")}>
-              <Download aria-hidden="true" className="h-4 w-4" />
-              {t("exportExcel")}
-            </Button>
+            {permissions.canExportFullBackup ? (
+              <>
+                <Button onClick={() => void downloadBackupJson()}>
+                  <FileJson aria-hidden="true" className="h-4 w-4" />
+                  {t("backupJson")}
+                </Button>
+                <Button onClick={() => void downloadFullLedgerExcel()}>
+                  <Download aria-hidden="true" className="h-4 w-4" />
+                  {t("exportExcel")}
+                </Button>
+              </>
+            ) : null}
           </>
         }
         eyebrow={t("localMvp")}
         description={t("settingsPageDescription")}
         title={t("settings")}
       />
+
+      {!permissions.canExportFullBackup ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       <form className="space-y-6" onSubmit={submit}>
         <section className="surface-card space-y-4 p-5">
@@ -420,10 +453,12 @@ export default function SettingsPage() {
             <Database aria-hidden="true" className="h-4 w-4" />
             {t("checkSupabaseHealth")}
           </Button>
-          <Button onClick={downloadBackupJson}>
-            <FileJson aria-hidden="true" className="h-4 w-4" />
-            {t("exportLocalBackupJson")}
-          </Button>
+          {permissions.canExportFullBackup ? (
+            <Button onClick={() => void downloadBackupJson()}>
+              <FileJson aria-hidden="true" className="h-4 w-4" />
+              {t("exportLocalBackupJson")}
+            </Button>
+          ) : null}
           <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
             {t("importLocalBackupJson")}
@@ -465,10 +500,12 @@ export default function SettingsPage() {
         </section>
 
         <div className="flex flex-wrap gap-2">
-          <Button onClick={downloadBackupJson}>
-            <FileJson aria-hidden="true" className="h-4 w-4" />
-            {t("exportLocalBackupJson")}
-          </Button>
+          {permissions.canExportFullBackup ? (
+            <Button onClick={() => void downloadBackupJson()}>
+              <FileJson aria-hidden="true" className="h-4 w-4" />
+              {t("exportLocalBackupJson")}
+            </Button>
+          ) : null}
           <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
             <Upload aria-hidden="true" className="h-4 w-4" />
             {t("importLocalBackupJson")}

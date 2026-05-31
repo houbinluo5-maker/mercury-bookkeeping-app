@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Download, Search } from "lucide-react";
 import { Button } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
+import { PermissionNotice } from "@/components/permission-notice";
 import {
   auditActionLabelKey,
   auditActions,
@@ -48,7 +49,7 @@ function csvRows(entries: AuditLog[]) {
 }
 
 export default function AuditPage() {
-  const { auditLogs, settings } = useBookkeeping();
+  const { auditLogs, permissions, recordExportAudit, settings } = useBookkeeping();
   const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [startDate, setStartDate] = useState(`${settings.tax_year}-01-01`);
@@ -89,26 +90,39 @@ export default function AuditPage() {
     });
   }, [action, auditLogs, endDate, entityType, query, source, startDate]);
 
+  async function exportAuditLog() {
+    const fileName = `audit-trail-${new Date().toISOString().slice(0, 10)}.csv`;
+    const allowed = await recordExportAudit({
+      entityId: "audit-trail",
+      entityType: "workspace",
+      exportType: "audit_log",
+      fileName,
+      reportPeriod: `${startDate} to ${endDate}`
+    });
+
+    if (!allowed) return;
+
+    downloadCsv(csvHeaders, csvRows(filteredEntries), fileName);
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
-          <Button
-            onClick={() =>
-              downloadCsv(
-                csvHeaders,
-                csvRows(filteredEntries),
-                `audit-trail-${new Date().toISOString().slice(0, 10)}.csv`
-              )
-            }
-          >
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("exportAuditLogCsv")}
-          </Button>
+          permissions.canExportReports ? (
+            <Button onClick={() => void exportAuditLog()}>
+              <Download aria-hidden="true" className="h-4 w-4" />
+              {t("exportAuditLogCsv")}
+            </Button>
+          ) : null
         }
         eyebrow={`${filteredEntries.length} ${t("entries")}`}
         title={t("auditTrail")}
       />
+
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       <section className="rounded-lg border border-line bg-white p-4 shadow-soft">
         <p className="text-sm text-slate-600">{t("auditTrailHelp")}</p>

@@ -15,8 +15,10 @@ Mercury Books now enforces workspace role permissions for the authenticated work
 | Upload/replace/delete receipts | Yes | Yes | No | No |
 | Run reconciliation actions | Yes | Yes | No | No |
 | Close/reopen months | Yes | Yes | No | No |
-| View/export reports | Yes | Yes | Yes | Yes |
-| View/export tax package | Yes | Yes | Yes | Yes |
+| View reports | Yes | Yes | Yes | Yes |
+| Export reports | Yes | Yes | No | Yes |
+| View tax package | Yes | Yes | Yes | Yes |
+| Export tax package | Yes | Yes | No | Yes |
 | View audit trail | Yes | Yes | Yes | Yes |
 | View team page | Yes | Yes | Yes | Yes |
 
@@ -41,6 +43,10 @@ Central helpers live in `lib/permissions.ts`:
 - `canExportReports`
 - `canViewTaxPackage`
 - `canExportTaxPackage`
+- `canExportTransactions`
+- `canExportReceipts`
+- `canExportFullBackup`
+- `canExportWorkspaceArchive`
 - `canViewAuditTrail`
 - `canViewTeam`
 - `canInviteMembers`
@@ -89,7 +95,7 @@ The migration `supabase/migrations/202605270001_rbac_permission_denied_audit.sql
 - Viewer and CPA roles are read-only for bookkeeping data and receipt files.
 - Owner is the only role that can manage workspace settings or remove/change non-owner members.
 - Admin can operate bookkeeping workflows but cannot change owner/member management or workspace settings.
-- Owner transfer, billing permissions, subscription gating, and detailed export policies are out of scope for this phase.
+- Owner transfer, billing permissions, and subscription gating are out of scope for this phase.
 
 ## Manual QA Checklist
 

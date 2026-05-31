@@ -1,4 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  canExportLedgerData,
+  exportPermissionDeniedMessage,
+  type ExportAuditDetails
+} from "@/lib/export-audit";
+import { logExportAudit } from "@/lib/export-audit-server";
 import { logPermissionDenied } from "@/lib/permission-audit-server";
 import { canManageWorkspace, permissionDeniedMessage } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
@@ -63,7 +69,24 @@ export async function GET(request: NextRequest) {
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
+    const backupExport = request.nextUrl.searchParams.get("export") === "backup";
+    const auditDetails = {
+      entityId: auth.workspace.id,
+      entityType: "workspace",
+      exportType: "workspace_backup"
+    } satisfies ExportAuditDetails;
+
+    if (backupExport && !canExportLedgerData(auth.membership, auditDetails.exportType)) {
+      await logExportAudit(auth, auditDetails, "denied");
+
+      return NextResponse.json({ error: exportPermissionDeniedMessage }, { status: 403 });
+    }
+
     const data = await loadSupabaseBackup(auth.workspace.id);
+
+    if (backupExport) {
+      await logExportAudit(auth, auditDetails, "success");
+    }
 
     return NextResponse.json({
       apiStatus: 200,

@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { logPermissionDenied } from "@/lib/permission-audit-server";
 import {
+  canExportLedgerData,
+  exportPermissionDeniedMessage,
+  type ExportAuditDetails
+} from "@/lib/export-audit";
+import { logExportAudit } from "@/lib/export-audit-server";
+import {
   canCloseMonth,
   canReopenMonth,
   permissionDeniedMessage
@@ -68,6 +74,15 @@ async function forbidden(
   }
 
   return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
+}
+
+async function exportForbidden(
+  auth: NonNullable<Awaited<ReturnType<typeof getAuthenticatedContext>>>,
+  details: ExportAuditDetails
+) {
+  await logExportAudit(auth, details, "denied");
+
+  return NextResponse.json({ error: exportPermissionDeniedMessage }, { status: 403 });
 }
 
 function supabaseError(error: unknown) {
@@ -152,8 +167,21 @@ export async function GET(request: NextRequest) {
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const closings = await loadSupabaseMonthlyClosings(auth.workspace.id);
     const exportType = request.nextUrl.searchParams.get("export");
+    const auditDetails = {
+      entityId: auth.workspace.id,
+      entityType: "reconciliation",
+      exportType: "monthly_closing_summary",
+      reportPeriod: "all"
+    } satisfies ExportAuditDetails;
+
+    if (exportType === "summary") {
+      if (!canExportLedgerData(auth.membership, auditDetails.exportType)) {
+        return exportForbidden(auth, auditDetails);
+      }
+    }
+
+    const closings = await loadSupabaseMonthlyClosings(auth.workspace.id);
 
     if (exportType === "summary") {
       const headers = [
@@ -195,6 +223,8 @@ export async function GET(request: NextRequest) {
             .join(",")
         )
         .join("\n");
+
+      await logExportAudit(auth, auditDetails, "success");
 
       return new NextResponse(csv, {
         headers: {

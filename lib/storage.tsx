@@ -27,6 +27,13 @@ import {
   requiresClosedPeriodReason
 } from "@/lib/monthly-closing";
 import {
+  buildExportAuditEntry,
+  canExportLedgerData,
+  exportPermissionDeniedMessage,
+  type ExportActorContext,
+  type ExportAuditDetails
+} from "@/lib/export-audit";
+import {
   getReceiptRequiredDefault,
   normalizeCategoryReceiptDefault
 } from "@/lib/receipt-requirements";
@@ -89,6 +96,7 @@ type BookkeepingContextValue = {
   clearTransactions: () => void;
   resetDemoData: () => void;
   exportBackup: () => LocalBackup;
+  recordExportAudit: (details: ExportAuditDetails) => Promise<boolean>;
   importBackup: (backup: LocalBackup) => void;
   syncToSupabase: () => Promise<boolean>;
   loadFromSupabase: () => Promise<boolean>;
@@ -129,6 +137,13 @@ type AuditApiResponse = {
   error?: string;
   message?: string;
   mode: StorageStatus["mode"];
+};
+
+type ExportAuditApiResponse = {
+  audit_log?: AuditLog | null;
+  configured: boolean;
+  error?: string;
+  ok?: boolean;
 };
 
 type StorageHealthApiResponse = {
@@ -333,7 +348,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [monthlyClosings, setMonthlyClosings] = useState<MonthlyClosing[]>([]);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>(checkingStorageStatus);
-  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | "unknown">("owner");
+  const [workspaceRole, setWorkspaceRole] = useState<WorkspaceRole | "unknown">("unknown");
+  const [exportActorContext, setExportActorContext] = useState<ExportActorContext>({});
   const [loaded, setLoaded] = useState(false);
   const permissions = useMemo(() => permissionsForRole(workspaceRole === "unknown" ? null : workspaceRole), [workspaceRole]);
 
@@ -352,8 +368,21 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     fetch("/api/auth/me", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) return;
-        const account = (await response.json()) as { role?: WorkspaceRole };
-        setWorkspaceRole(account.role ?? "owner");
+        const account = (await response.json()) as {
+          normalizedEmail?: string;
+          role?: WorkspaceRole;
+          user?: { email?: string; id?: string };
+          workspace?: { id?: string };
+        };
+        const role = account.role ?? "owner";
+
+        setWorkspaceRole(role);
+        setExportActorContext({
+          actorEmail: account.normalizedEmail || account.user?.email,
+          actorRole: role,
+          actorUserId: account.user?.id,
+          workspaceId: account.workspace?.id
+        });
       })
       .catch(() => undefined);
   }, []);
@@ -1826,6 +1855,72 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     transactions
   ]);
 
+  const recordExportAudit = useCallback(
+    async (details: ExportAuditDetails) => {
+      const localRole = workspaceRole === "unknown" ? undefined : workspaceRole;
+      const allowed = canExportLedgerData(localRole, details.exportType);
+
+      if (storageStatus.configured && storageStatus.mode === "supabase") {
+        try {
+          const response = await fetch("/api/exports/audit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(details)
+          });
+          const responseText = await response.text();
+          const result = responseText.trim()
+            ? (JSON.parse(responseText) as ExportAuditApiResponse)
+            : null;
+
+          if (result?.audit_log) {
+            setAuditLogs((current) => mergeAuditLogs(current, [result.audit_log as AuditLog]));
+          }
+
+          if (!response.ok) {
+            setPermissionDeniedStatus(
+              result?.error === exportPermissionDeniedMessage
+                ? "Export is restricted for your role. Ask the workspace owner for export access."
+                : result?.error || "Export audit logging failed."
+            );
+            return false;
+          }
+
+          return true;
+        } catch (error) {
+          setStorageStatus((current) => ({
+            ...current,
+            apiStatus: 0,
+            apiStatusText: "Client error",
+            error: error instanceof Error ? error.message : "Export audit logging failed.",
+            mode: "error",
+            message: error instanceof Error ? error.message : "Export audit logging failed."
+          }));
+          return false;
+        }
+      }
+
+      const auditEntry = buildExportAuditEntry(details, allowed ? "success" : "denied", {
+        ...exportActorContext,
+        actorRole: workspaceRole
+      });
+
+      setAuditLogs((current) => mergeAuditLogs(current, [auditEntry]));
+
+      if (!allowed) {
+        setPermissionDeniedStatus("Export is restricted for your role. Ask the workspace owner for export access.");
+      }
+
+      return allowed;
+    },
+    [
+      exportActorContext,
+      setPermissionDeniedStatus,
+      storageStatus.configured,
+      storageStatus.mode,
+      workspaceRole
+    ]
+  );
+
   const exportBackup = useCallback<() => LocalBackup>(() => {
     return createBackup(transactions, categoryState, settings, auditLogs, monthlyClosings);
   }, [auditLogs, categoryState, monthlyClosings, settings, transactions]);
@@ -1879,6 +1974,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       clearTransactions,
       resetDemoData,
       exportBackup,
+      recordExportAudit,
       importBackup,
       syncToSupabase,
       loadFromSupabase,
@@ -1908,6 +2004,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       closeMonth,
       reopenMonth,
       resetDemoData,
+      recordExportAudit,
       settings,
       storageStatus,
       syncToSupabase,

@@ -33,6 +33,7 @@ import {
 import { downloadCsv } from "@/lib/tax-package";
 import { isDateInClosedPeriod } from "@/lib/monthly-closing";
 import { useBookkeeping } from "@/lib/storage";
+import type { TaxPackageRow } from "@/lib/tax-package";
 import type { AuditLog, Category, Transaction, TransactionDraft } from "@/lib/types";
 
 function defaultYearStart(year: number) {
@@ -388,6 +389,7 @@ export default function ReconciliationPage() {
     deleteTransaction,
     monthlyClosings,
     permissions,
+    recordExportAudit,
     settings,
     transactions,
     updateTransaction
@@ -672,6 +674,24 @@ export default function ReconciliationPage() {
     }
   }
 
+  async function exportReconciliationCsv(
+    headers: string[],
+    rows: TaxPackageRow[],
+    fileName: string
+  ) {
+    const allowed = await recordExportAudit({
+      entityId: currentPrefix,
+      entityType: "reconciliation",
+      exportType: "reconciliation_report",
+      fileName,
+      reportPeriod: `${startDate} to ${endDate}`
+    });
+
+    if (!allowed) return;
+
+    downloadCsv(headers, rows, fileName);
+  }
+
   const summaryCards = [
     ["totalTransactions", String(reconciliationData.summary.totalTransactions), "blue"],
     ["unreconciledTransactions", String(reconciliationData.summary.unreconciledTransactions), reconciliationData.summary.unreconciledTransactions ? "amber" : "green"],
@@ -706,6 +726,9 @@ export default function ReconciliationPage() {
       </AlertBanner>
 
       {reconciliationReadOnly ? <PermissionNotice detailKey="permissionRequiredOwnerAdmin" /> : null}
+      {!permissions.canExportReports ? (
+        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      ) : null}
 
       <FilterBar>
         <SectionHeader description={t("reconciliationFilterHelp")} title={t("reviewScope")} />
@@ -882,10 +905,11 @@ export default function ReconciliationPage() {
             <h2 className="section-title">{t("reconciliationExports")}</h2>
             <p className="section-subtitle">{t("reconciliationExportsHelp")}</p>
           </div>
+          {permissions.canExportReports ? (
           <div className="mt-4 grid gap-2">
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   reconciliationIssueHeaders,
                   reconciliationData.allIssueRows,
                   `${currentPrefix}-all-issues.csv`
@@ -897,7 +921,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   reconciliationIssueHeaders,
                   reconciliationData.missingReceipts.map((issue) => [
                     t("missingReceipts"),
@@ -923,7 +947,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   reconciliationIssueHeaders,
                   reconciliationData.needsReview.map((issue) => [
                     t("needsReview"),
@@ -949,7 +973,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   duplicateCandidateHeaders,
                   reconciliationData.duplicateRows,
                   `${currentPrefix}-duplicate-candidates.csv`
@@ -961,7 +985,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   reconciliationIssueHeaders,
                   reconciliationData.unreconciledTransactions.map((issue) => [
                     t("unreconciledTransactions"),
@@ -987,7 +1011,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   reconciliationIssueHeaders,
                   [...reconciliationData.ownerActivity, ...reconciliationData.internalTransfers].map(
                     (issue) => [
@@ -1017,7 +1041,7 @@ export default function ReconciliationPage() {
             </Button>
             <Button
               onClick={() =>
-                downloadCsv(
+                void exportReconciliationCsv(
                   readinessChecklistHeaders,
                   reconciliationData.readinessChecklistRows,
                   `${currentPrefix}-monthly-readiness-checklist.csv`
@@ -1028,6 +1052,11 @@ export default function ReconciliationPage() {
               {t("exportMonthlyReadinessChecklistCsv")}
             </Button>
           </div>
+          ) : (
+            <div className="mt-4">
+              <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+            </div>
+          )}
         </div>
       </section>
 
