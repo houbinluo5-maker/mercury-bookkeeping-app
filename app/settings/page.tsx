@@ -452,14 +452,16 @@ export default function SettingsPage() {
   }
 
   async function downloadFullLedgerExcel() {
-    const fileName = "bookkeeping-full-export.xlsx";
+    const fileName = "boss-finance-full-ledger.xlsx";
     const allowed = await recordExportAudit({
       entityId: "full-ledger",
       entityType: "workspace",
       exportType: "workspace_backup",
       fileFormat: "xlsx",
       fileName,
-      rowCount: transactions.length
+      rowCount: transactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;

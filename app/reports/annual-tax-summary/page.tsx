@@ -29,7 +29,7 @@ export default function AnnualTaxSummaryPage() {
   const summary = summarizeTransactions(reportTransactions);
   const taxRows = groupByTaxLine(reportTransactions);
   const categoryRows = groupByCategory(reportTransactions);
-  const exportFileName = `${year}-annual-tax-summary.xlsx`;
+  const exportFileName = `${year}-boss-finance-annual-tax-summary.xlsx`;
 
   async function exportAnnualTaxSummary() {
     const allowed = await recordExportAudit({
@@ -39,7 +39,9 @@ export default function AnnualTaxSummaryPage() {
       fileFormat: "xlsx",
       fileName: exportFileName,
       reportPeriod: String(year),
-      rowCount: reportTransactions.length
+      rowCount: reportTransactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;

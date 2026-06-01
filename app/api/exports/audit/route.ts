@@ -43,6 +43,16 @@ function readRowCount(record: JsonRecord) {
   return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
 }
 
+function readSheetCount(record: JsonRecord) {
+  const value = Number(record.sheetCount);
+
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
+}
+
+function readWorkbookType(record: JsonRecord) {
+  return record.workbookType === "boss_finance_workbook" ? "boss_finance_workbook" : undefined;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
 
@@ -73,7 +83,9 @@ export async function POST(request: NextRequest) {
     fileFormat: readFileFormat(body),
     fileName: readText(body, "fileName", 240),
     reportPeriod: readText(body, "reportPeriod"),
-    rowCount: readRowCount(body)
+    rowCount: readRowCount(body),
+    sheetCount: readSheetCount(body),
+    workbookType: readWorkbookType(body)
   };
   const allowed = canExportLedgerData(auth.membership, exportType);
   const auditLog = await logExportAudit(auth, details, allowed ? "success" : "denied");

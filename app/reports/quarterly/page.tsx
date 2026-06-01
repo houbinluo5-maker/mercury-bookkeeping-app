@@ -43,7 +43,7 @@ export default function QuarterlyReportPage() {
   const summary = summarizeTransactions(reportTransactions);
   const rows = groupByCategory(reportTransactions);
   const reportPeriod = `${year}-Q${quarter}`;
-  const exportFileName = `${year}-q${quarter}-report.xlsx`;
+  const exportFileName = `${year}-q${quarter}-boss-finance-report.xlsx`;
 
   async function exportQuarterlyReport() {
     const allowed = await recordExportAudit({
@@ -53,7 +53,9 @@ export default function QuarterlyReportPage() {
       fileFormat: "xlsx",
       fileName: exportFileName,
       reportPeriod,
-      rowCount: reportTransactions.length
+      rowCount: reportTransactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;

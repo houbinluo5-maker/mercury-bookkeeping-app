@@ -46,7 +46,7 @@ export default function MonthlyReportPage() {
   const rows = groupByCategory(reportTransactions);
   const closing = monthlyClosings.find((item) => item.id === monthlyClosingId(year, month));
   const reportPeriod = `${year}-${String(month).padStart(2, "0")}`;
-  const exportFileName = `${year}-${month}-monthly-report.xlsx`;
+  const exportFileName = `${year}-${month}-boss-finance-monthly-report.xlsx`;
 
   async function exportMonthlyReport() {
     const allowed = await recordExportAudit({
@@ -56,7 +56,9 @@ export default function MonthlyReportPage() {
       fileFormat: "xlsx",
       fileName: exportFileName,
       reportPeriod,
-      rowCount: reportTransactions.length
+      rowCount: reportTransactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;

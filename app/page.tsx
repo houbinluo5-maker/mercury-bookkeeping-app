@@ -40,7 +40,7 @@ export default function DashboardPage() {
       reopenedCount * 12
   );
   const unresolvedItems = stats.unreconciled_count + stats.receipts_missing_count + needsReviewCount + reopenedCount;
-  const dashboardExportFileName = `${settings.tax_year}-bookkeeping.xlsx`;
+  const dashboardExportFileName = `${settings.tax_year}-boss-finance-workbook.xlsx`;
 
   async function exportDashboardReport() {
     const allowed = await recordExportAudit({
@@ -50,7 +50,9 @@ export default function DashboardPage() {
       fileFormat: "xlsx",
       fileName: dashboardExportFileName,
       reportPeriod: String(settings.tax_year),
-      rowCount: yearTransactions.length
+      rowCount: yearTransactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;
