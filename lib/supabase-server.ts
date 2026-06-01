@@ -2,6 +2,7 @@ import {
   buildTransactionAuditLogs,
   createAuditEntry,
   normalizeAuditLogs,
+  transactionAuditDetails,
   transactionSummary,
   type TransactionAuditOptions
 } from "@/lib/audit";
@@ -596,10 +597,7 @@ export async function createSupabaseTransaction(
       actor: audit.actor ?? "admin",
       ...auditContext(audit, workspaceId),
       created_at: new Date().toISOString(),
-      details: {
-        result: "success",
-        summary: transactionSummary(normalized)
-      },
+      details: transactionAuditDetails(normalized, { result: "success" }),
       entity_id: normalized.id,
       entity_type: "transaction",
       field_name: "",
@@ -725,10 +723,7 @@ export async function deleteSupabaseTransaction(
       actor: audit.actor ?? "admin",
       ...auditContext(audit, workspaceId),
       created_at: new Date().toISOString(),
-      details: {
-        result: "success",
-        summary: transactionSummary(previous)
-      },
+      details: transactionAuditDetails(previous, { result: "success" }),
       entity_id: previous.id,
       entity_type: "transaction",
       field_name: "",
@@ -769,11 +764,10 @@ export async function importSupabaseTransactions(
       actor: audit.actor ?? "system",
       ...auditContext(audit, workspaceId),
       created_at: timestamp,
-      details: {
+      details: transactionAuditDetails(transaction, {
         result: "success",
-        source: audit.source ?? "csv_import",
-        summary: transactionSummary(transaction)
-      },
+        source: audit.source ?? "csv_import"
+      }),
       entity_id: transaction.id,
       entity_type: "transaction",
       field_name: "",
