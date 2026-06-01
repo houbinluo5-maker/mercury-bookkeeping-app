@@ -4,24 +4,25 @@
 
 :root {
   color-scheme: light;
-  --background: #f5f3ef;
-  --foreground: #0b1220;
+  --background: #f7f6f2;
+  --foreground: #0a1020;
   --surface: #ffffff;
-  --muted-surface: #f1f5f9;
+  --muted-surface: #f8fafc;
 }
 
 * {
   box-sizing: border-box;
 }
 
-  body {
+body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
   font-family:
-    Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    Inter, Aptos, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     sans-serif;
-  font-feature-settings: "tnum";
+  font-feature-settings: "tnum", "cv02", "cv03", "cv04";
+  text-rendering: geometricPrecision;
 }
 
 body::before {
@@ -30,10 +31,7 @@ body::before {
   z-index: -1;
   pointer-events: none;
   content: "";
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(245, 243, 239, 0.92)),
-    radial-gradient(circle at 18% 0%, rgba(18, 58, 85, 0.08), transparent 32%),
-    radial-gradient(circle at 92% 10%, rgba(40, 122, 104, 0.08), transparent 28%);
+  background: linear-gradient(180deg, #fbfaf7 0%, #f8fafc 48%, #f7f6f2 100%);
 }
 
 a {
@@ -54,46 +52,54 @@ textarea {
   }
 
   .form-input {
-    @apply h-10 w-full rounded-md border border-line bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-marine focus:ring-2 focus:ring-marine/15;
+    @apply h-11 w-full rounded-lg border border-line bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-marine focus:ring-4 focus:ring-marine/10 disabled:bg-slate-50 disabled:text-slate-500;
   }
 
   .form-textarea {
-    @apply min-h-24 w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-marine focus:ring-2 focus:ring-marine/15;
+    @apply min-h-24 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm leading-6 text-slate-900 shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-marine focus:ring-4 focus:ring-marine/10 disabled:bg-slate-50 disabled:text-slate-500;
   }
 
   .table-head {
-    @apply bg-slate-50 text-left text-xs font-semibold uppercase tracking-normal text-slate-500;
+    @apply border-b border-line bg-slate-50/90 text-left text-[0.72rem] font-semibold uppercase tracking-normal text-slate-500;
   }
 
   .table-cell {
-    @apply border-b border-slate-200 px-4 py-3 align-top text-sm;
+    @apply border-b border-slate-100 px-4 py-3.5 align-top text-sm text-slate-700;
   }
 
   .surface-card {
-    @apply rounded-lg border border-line bg-white/95 shadow-panel backdrop-blur;
+    @apply rounded-lg border border-line bg-white shadow-soft;
   }
 
   .section-title {
-    @apply text-base font-semibold tracking-normal text-ink;
+    @apply text-lg font-semibold tracking-normal text-ink;
   }
 
   .section-subtitle {
-    @apply mt-1 text-sm leading-6 text-slate-600;
+    @apply mt-1 text-sm leading-6 text-slate-500;
   }
 
   .notice {
-    @apply rounded-lg border px-4 py-3 text-sm leading-6;
+    @apply rounded-lg border px-4 py-3 text-sm leading-6 shadow-sm;
   }
 
   .premium-panel {
-    @apply rounded-lg border border-slate-200 bg-white/95 shadow-command backdrop-blur;
+    @apply rounded-lg border border-line bg-white shadow-panel;
   }
 
   .filter-shell {
-    @apply rounded-lg border border-slate-200 bg-white/90 p-4 shadow-sm;
+    @apply rounded-lg border border-line bg-white p-4 shadow-soft;
   }
 
   .data-shell {
-    @apply overflow-hidden rounded-lg border border-slate-200 bg-white shadow-panel;
+    @apply overflow-hidden rounded-lg border border-line bg-white shadow-panel;
+  }
+
+  .finance-kicker {
+    @apply text-xs font-semibold uppercase tracking-normal text-marine;
+  }
+
+  .subtle-tile {
+    @apply rounded-lg border border-line bg-slate-50/70 p-4;
   }
 }
