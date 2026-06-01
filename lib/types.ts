@@ -90,14 +90,35 @@ export type Category = {
 };
 
 export type AppSettings = {
+  workspace_name: string;
   company_name: string;
+  company_legal_name: string;
+  dba_name: string;
+  business_type: string;
   entity_type: string;
+  ein_tax_id: string;
+  registered_state: string;
+  business_address: string;
+  contact_email: string;
+  finance_contact_name: string;
   tax_year: number;
   default_currency: string;
   default_account: string;
   bookkeeping_method: "cash" | "accrual";
   business_type_tax_notes: string;
+  country_region: string;
+  timezone_display: "Asia/Shanghai" | "UTC";
   language: Language;
+  require_receipts_over_threshold: boolean;
+  receipt_required_threshold_amount: number;
+  monthly_close_reminder_day: number;
+  lock_closed_months: boolean;
+  allow_admins_reopen_months: boolean;
+  cpa_read_only_note: string;
+  default_category_fallback: string;
+  data_retention_policy: "7_years" | "5_years" | "indefinite";
+  receipt_retention_policy: "7_years" | "5_years" | "indefinite";
+  export_watermark_preference: "workspace_name" | "confidential" | "none";
 };
 
 export type AuditDetailValue =

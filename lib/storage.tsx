@@ -43,6 +43,10 @@ import {
   permissionsForRole,
   type WorkspacePermissions
 } from "@/lib/permissions";
+import {
+  canUpdateSettingsFields,
+  changedSettingsFields
+} from "@/lib/settings-permissions";
 import { categories, defaultSettings, seedTransactions } from "@/lib/seed-data";
 import type {
   AppSettings,
@@ -138,6 +142,17 @@ type AuditApiResponse = {
   error?: string;
   message?: string;
   mode: StorageStatus["mode"];
+};
+
+type SettingsApiResponse = {
+  apiStatus?: number;
+  apiStatusText?: string;
+  audit_logs?: AuditLog[];
+  configured: boolean;
+  error?: string;
+  message?: string;
+  mode: StorageStatus["mode"];
+  settings?: AppSettings;
 };
 
 type ExportAuditApiResponse = {
@@ -515,6 +530,64 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
       if (!response.ok) {
         const detail = result.error || result.message || "Audit request failed.";
+
+        throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
+      }
+
+      return {
+        ...result,
+        apiStatus: result.apiStatus ?? response.status,
+        apiStatusText: result.apiStatusText ?? response.statusText
+      };
+    },
+    []
+  );
+
+  const requestSettingsUpdate = useCallback(
+    async (nextSettings: AppSettings): Promise<SettingsApiResponse> => {
+      const response = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: nextSettings })
+      });
+      const responseText = await response.text();
+      let result: SettingsApiResponse | null = null;
+
+      if (responseText.trim()) {
+        try {
+          result = JSON.parse(responseText) as SettingsApiResponse;
+        } catch {
+          throw new Error(
+            `Settings API returned invalid JSON. HTTP ${response.status} ${response.statusText}. ${responseText.slice(0, 240)}`
+          );
+        }
+      }
+
+      if (!result && !response.ok) {
+        throw new Error(`Settings API request failed. HTTP ${response.status} ${response.statusText}.`);
+      }
+
+      if (!result) {
+        return {
+          apiStatus: response.status,
+          apiStatusText: response.statusText,
+          configured: false,
+          message: "Settings API returned an empty successful response; using localStorage fallback.",
+          mode: "local"
+        };
+      }
+
+      if (!response.ok) {
+        const detail = result.error || result.message || "Settings update failed.";
+
+        if (response.status === 403) {
+          return {
+            ...result,
+            apiStatus: response.status,
+            apiStatusText: response.statusText,
+            mode: "error"
+          };
+        }
 
         throw new Error(`HTTP ${response.status} ${response.statusText}: ${detail}`);
       }
@@ -1778,17 +1851,45 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
   const updateSettings = useCallback(
     (nextSettings: AppSettings, audit: SettingsAuditOptions = {}) => {
-      if (!permissions.canManageSettings) {
+      const normalized = normalizeSettings(nextSettings);
+      const changedFields = changedSettingsFields(settings, normalized);
+
+      if (!canUpdateSettingsFields(workspaceRole, changedFields)) {
         setPermissionDeniedStatus("Settings changes require workspace owner access.");
         return;
       }
 
-      const normalized = normalizeSettings(nextSettings);
       const newAuditEntries = buildSettingsAuditLogs(settings, normalized, {
         ...audit,
         ...auditIdentity
       });
       const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
+
+      if (storageStatus.configured && storageStatus.mode === "supabase") {
+        void requestSettingsUpdate(normalized)
+          .then((result) => {
+            if (result.settings) {
+              setSettings(normalizeSettings(result.settings));
+            }
+            if (result.audit_logs?.length) {
+              setAuditLogs((current) => mergeAuditLogs(current, result.audit_logs));
+            }
+            if (result.apiStatus === 403) {
+              setPermissionDeniedStatus(result.error || "Settings changes require workspace owner access.");
+            }
+          })
+          .catch((error) => {
+            setStorageStatus((current) => ({
+              ...current,
+              apiStatus: 0,
+              apiStatusText: "Client error",
+              error: error instanceof Error ? error.message : "Settings update failed.",
+              mode: "error",
+              message: error instanceof Error ? error.message : "Settings update failed."
+            }));
+          });
+        return;
+      }
 
       setSettings(normalized);
       if (newAuditEntries.length) {
@@ -1804,10 +1905,13 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       auditIdentity,
       categoryState,
       maybeSyncToSupabase,
-      permissions.canManageSettings,
+      requestSettingsUpdate,
       setPermissionDeniedStatus,
       settings,
-      transactions
+      storageStatus.configured,
+      storageStatus.mode,
+      transactions,
+      workspaceRole
     ]
   );
 

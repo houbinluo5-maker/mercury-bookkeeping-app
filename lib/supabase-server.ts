@@ -40,14 +40,35 @@ type SupabaseConfig = {
 type CompanySettingsRow = {
   id: "default";
   workspace_id?: string;
+  workspace_name?: string;
   company_name: string;
+  company_legal_name?: string;
+  dba_name?: string;
+  business_model?: string;
   tax_year: number;
   default_currency: string;
   default_account_name: string;
   bookkeeping_method: "cash" | "accrual";
   business_type: string;
+  ein_tax_id?: string;
+  registered_state?: string;
+  business_address?: string;
+  contact_email?: string;
+  finance_contact_name?: string;
   tax_notes: string;
+  country_region?: string;
+  timezone_display?: AppSettings["timezone_display"];
   language: AppSettings["language"];
+  require_receipts_over_threshold?: boolean;
+  receipt_required_threshold_amount?: number;
+  monthly_close_reminder_day?: number;
+  lock_closed_months?: boolean;
+  allow_admins_reopen_months?: boolean;
+  cpa_read_only_note?: string;
+  default_category_fallback?: string;
+  data_retention_policy?: AppSettings["data_retention_policy"];
+  receipt_retention_policy?: AppSettings["receipt_retention_policy"];
+  export_watermark_preference?: AppSettings["export_watermark_preference"];
 };
 
 type ReceiptRow = {
@@ -180,15 +201,72 @@ function fromSettingsRow(row: Partial<CompanySettingsRow> | null | undefined): A
   if (!row) return defaultSettings;
 
   return normalizeSettings({
+    workspace_name: row.workspace_name,
     company_name: row.company_name,
+    company_legal_name: row.company_legal_name,
+    dba_name: row.dba_name,
+    business_type: row.business_model,
     tax_year: row.tax_year,
     default_currency: row.default_currency,
     default_account: row.default_account_name,
     bookkeeping_method: row.bookkeeping_method,
     entity_type: row.business_type,
+    ein_tax_id: row.ein_tax_id,
+    registered_state: row.registered_state,
+    business_address: row.business_address,
+    contact_email: row.contact_email,
+    finance_contact_name: row.finance_contact_name,
     business_type_tax_notes: row.tax_notes,
-    language: row.language
+    country_region: row.country_region,
+    timezone_display: row.timezone_display,
+    language: row.language,
+    require_receipts_over_threshold: row.require_receipts_over_threshold,
+    receipt_required_threshold_amount: row.receipt_required_threshold_amount,
+    monthly_close_reminder_day: row.monthly_close_reminder_day,
+    lock_closed_months: row.lock_closed_months,
+    allow_admins_reopen_months: row.allow_admins_reopen_months,
+    cpa_read_only_note: row.cpa_read_only_note,
+    default_category_fallback: row.default_category_fallback,
+    data_retention_policy: row.data_retention_policy,
+    receipt_retention_policy: row.receipt_retention_policy,
+    export_watermark_preference: row.export_watermark_preference
   });
+}
+
+function toSettingsRow(settings: AppSettings, workspaceId?: string): CompanySettingsRow {
+  return {
+    id: "default",
+    ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    workspace_name: settings.workspace_name,
+    company_name: settings.company_name,
+    company_legal_name: settings.company_legal_name,
+    dba_name: settings.dba_name,
+    business_model: settings.business_type,
+    tax_year: settings.tax_year,
+    default_currency: settings.default_currency,
+    default_account_name: settings.default_account,
+    bookkeeping_method: settings.bookkeeping_method,
+    business_type: settings.entity_type,
+    ein_tax_id: settings.ein_tax_id,
+    registered_state: settings.registered_state,
+    business_address: settings.business_address,
+    contact_email: settings.contact_email,
+    finance_contact_name: settings.finance_contact_name,
+    tax_notes: settings.business_type_tax_notes,
+    country_region: settings.country_region,
+    timezone_display: settings.timezone_display,
+    language: settings.language,
+    require_receipts_over_threshold: settings.require_receipts_over_threshold,
+    receipt_required_threshold_amount: settings.receipt_required_threshold_amount,
+    monthly_close_reminder_day: settings.monthly_close_reminder_day,
+    lock_closed_months: settings.lock_closed_months,
+    allow_admins_reopen_months: settings.allow_admins_reopen_months,
+    cpa_read_only_note: settings.cpa_read_only_note,
+    default_category_fallback: settings.default_category_fallback,
+    data_retention_policy: settings.data_retention_policy,
+    receipt_retention_policy: settings.receipt_retention_policy,
+    export_watermark_preference: settings.export_watermark_preference
+  };
 }
 
 function toReceiptRows(transactions: Transaction[], workspaceId?: string): ReceiptRow[] {
@@ -839,6 +917,59 @@ export async function loadSupabaseBackup(workspaceId?: string): Promise<LocalBac
     audit_logs: normalizeAuditLogs(auditLogRows),
     monthly_closings: normalizeMonthlyClosings(monthlyClosingRows),
     settings: fromSettingsRow(settingsRows[0])
+  };
+}
+
+export async function loadSupabaseSettings(workspaceId?: string): Promise<AppSettings> {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const rows = await supabaseRequest<CompanySettingsRow[]>(
+    config,
+    `company_settings?select=*&id=eq.default${workspaceFilter(workspaceId)}&limit=1`
+  );
+
+  return fromSettingsRow(rows[0]);
+}
+
+export async function updateSupabaseSettings(
+  settings: AppSettings,
+  auditLogs: AuditLog[],
+  workspaceId?: string
+) {
+  const config = getSupabaseConfig();
+
+  if (!config) {
+    throw new Error("Supabase is not configured.");
+  }
+
+  const normalizedSettings = normalizeSettings(settings);
+  const conflictColumns = workspaceId ? "workspace_id,id" : "id";
+  const rows = await supabaseRequest<CompanySettingsRow[]>(
+    config,
+    `company_settings?on_conflict=${conflictColumns}&select=*`,
+    {
+      method: "POST",
+      body: JSON.stringify([toSettingsRow(normalizedSettings, workspaceId)]),
+      headers: {
+        Prefer: "resolution=merge-duplicates,return=representation"
+      }
+    }
+  );
+
+  await insertIgnoreRows(
+    config,
+    "audit_logs",
+    normalizeAuditLogs(auditLogs).map((entry) => withWorkspace(entry, workspaceId)),
+    "id"
+  );
+
+  return {
+    audit_logs: normalizeAuditLogs(auditLogs),
+    settings: fromSettingsRow(rows[0])
   };
 }
 
