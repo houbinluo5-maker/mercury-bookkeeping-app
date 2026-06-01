@@ -7,6 +7,7 @@ import {
   AuthCardHeader,
   AuthDivider,
   AuthLayout,
+  AuthSecurityNote,
   GoogleGIcon,
   MicrosoftIcon,
   OAuthButton,
@@ -62,7 +63,7 @@ export function LoginPanel({
       <AuthCardHeader
         description={t("authLoginSubtitlePremium")}
         eyebrow={t("authSignInEyebrow")}
-        title={t("signIn")}
+        title={t("authLoginTitle")}
       />
 
       {!passwordConfigured || setup === "missing" ? (
@@ -84,7 +85,7 @@ export function LoginPanel({
       <form action="/api/auth/login" className="mt-6 space-y-4" method="post">
         <input name="next" type="hidden" value={nextPath} />
         <label className="block space-y-2">
-          <span className="form-label">{t("email")}</span>
+          <span className="form-label">{t("authEmailLabel")}</span>
           <input
             autoComplete="email"
             className={authInputClass}
@@ -95,7 +96,7 @@ export function LoginPanel({
           />
         </label>
         <label className="block space-y-2">
-          <span className="form-label">{t("password")}</span>
+          <span className="form-label">{t("authPasswordLabel")}</span>
           <input
             autoComplete="current-password"
             className={authInputClass}
@@ -107,7 +108,7 @@ export function LoginPanel({
         </label>
         <button className={primaryAuthButtonClass} disabled={!supabaseAuthConfigured} type="submit">
           <Mail aria-hidden="true" className="h-4 w-4" />
-          {t("signIn")}
+          {t("authLoginButton")}
         </button>
       </form>
 
@@ -121,7 +122,7 @@ export function LoginPanel({
       </div>
 
       {providersEnabled ? (
-        <div className="mt-6 space-y-3">
+        <div className="mt-7 space-y-3">
           <AuthDivider label={t("orContinueWith")} />
           {googleEnabled ? (
             <OAuthButton href={oauthProviderHref("google", nextPath)} icon={<GoogleGIcon />}>
@@ -141,8 +142,8 @@ export function LoginPanel({
         </div>
       ) : null}
 
-      <details className="mt-6 rounded-lg border border-slate-200 bg-slate-50/80 p-3 text-slate-600">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+      <details className="mt-7 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-slate-600">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700 marker:text-slate-400">
           {t("legacyAdminFallback")}
         </summary>
         <p className="mt-2 text-xs leading-5 text-slate-500">{t("legacyAdminFallbackHelp")}</p>
@@ -171,7 +172,7 @@ export function LoginPanel({
         </form>
       </details>
 
-      <p className="mt-5 text-xs leading-5 text-slate-500">{t("authNote")}</p>
+      <AuthSecurityNote />
     </AuthLayout>
   );
 }
