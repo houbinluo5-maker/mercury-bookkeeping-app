@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Github, LockKeyhole, Mail, ShieldAlert } from "lucide-react";
+import { Github, LockKeyhole, ShieldAlert } from "lucide-react";
 import {
   AuthAlert,
   AuthCardHeader,
@@ -14,16 +14,18 @@ import {
   authInputClass,
   oauthProviderHref,
   primaryAuthButtonClass,
+  sanitizeAuthDetail,
   secondaryAuthButtonClass
 } from "@/components/auth-panels";
 import { useI18n } from "@/lib/i18n";
 
 function friendlyLoginError(error: string | undefined, message: string | undefined, t: (key: string) => string) {
+  const safeMessage = sanitizeAuthDetail(message);
   if (error === "invalid") return t("passwordNotAccepted");
   if (error === "provider_disabled") return t("authProviderDisabled");
   if (error === "supabase_config") return t("authSupabaseConfigMissing");
-  if (error === "supabase") return message || t("authRequestFailedFriendly");
-  return message || t("authRequestFailedFriendly");
+  if (error === "supabase") return safeMessage || t("authRequestFailedFriendly");
+  return safeMessage || t("authRequestFailedFriendly");
 }
 
 export function LoginPanel({
@@ -57,7 +59,6 @@ export function LoginPanel({
   return (
     <AuthLayout
       description={t("authHeroSubtitlePremium")}
-      eyebrow={t("secureWorkspaceAccess")}
       title={t("authHeroTitlePremium")}
     >
       <AuthCardHeader
@@ -91,6 +92,7 @@ export function LoginPanel({
             className={authInputClass}
             disabled={!supabaseAuthConfigured}
             name="email"
+            placeholder={t("authEmailPlaceholder")}
             required
             type="email"
           />
@@ -102,21 +104,21 @@ export function LoginPanel({
             className={authInputClass}
             disabled={!supabaseAuthConfigured}
             name="password"
+            placeholder={t("authPasswordPlaceholder")}
             required
             type="password"
           />
         </label>
         <button className={primaryAuthButtonClass} disabled={!supabaseAuthConfigured} type="submit">
-          <Mail aria-hidden="true" className="h-4 w-4" />
           {t("authLoginButton")}
         </button>
       </form>
 
       <div className="mt-4 flex items-center justify-between gap-4 text-sm">
-        <Link className="font-semibold text-marine hover:text-ink" href="/forgot-password">
+        <Link className="font-semibold text-blue-600 hover:text-blue-700" href="/forgot-password">
           {t("forgotPassword")}
         </Link>
-        <Link className="font-semibold text-marine hover:text-ink" href={`/register?next=${encodeURIComponent(nextPath)}`}>
+        <Link className="font-semibold text-blue-600 hover:text-blue-700" href={`/register?next=${encodeURIComponent(nextPath)}`}>
           {t("createAccount")}
         </Link>
       </div>
@@ -142,7 +144,7 @@ export function LoginPanel({
         </div>
       ) : null}
 
-      <details className="mt-7 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-slate-600">
+      <details className="mt-7 rounded-xl border border-slate-200/80 bg-white/60 p-4 text-slate-600">
         <summary className="cursor-pointer text-sm font-semibold text-slate-700 marker:text-slate-400">
           {t("legacyAdminFallback")}
         </summary>
