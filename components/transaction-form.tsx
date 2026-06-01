@@ -114,7 +114,7 @@ export function TransactionForm() {
 
   return (
     <form className="space-y-6" onSubmit={submit}>
-      <section className="space-y-4 rounded-lg border border-line bg-white p-4 shadow-soft">
+      <section className="surface-card space-y-4 p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <label className="block flex-1 space-y-1">
             <span className="form-label">{t("naturalLanguageEntry")}</span>
@@ -151,7 +151,7 @@ export function TransactionForm() {
         </div>
 
         {parseResult ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-lg border border-line bg-slate-50/70 p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone={parseResult.needsReview ? "amber" : "green"}>
@@ -217,7 +217,7 @@ export function TransactionForm() {
         ) : null}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="surface-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-4">
         <label className="space-y-1">
           <span className="form-label">{t("date")}</span>
           <input
@@ -269,7 +269,7 @@ export function TransactionForm() {
         </label>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1fr_14rem_14rem]">
+      <section className="surface-card grid gap-4 p-5 lg:grid-cols-[1fr_14rem_14rem]">
         <label className="space-y-1">
           <span className="form-label">{t("description")}</span>
           <input
@@ -303,7 +303,7 @@ export function TransactionForm() {
         </label>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_10rem]">
+      <section className="surface-card grid gap-4 p-5 md:grid-cols-2 xl:grid-cols-[1fr_1fr_10rem]">
         <label className="space-y-1">
           <span className="form-label">{t("category")}</span>
           <select
@@ -337,7 +337,7 @@ export function TransactionForm() {
         </label>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1fr_18rem]">
+      <section className="surface-card grid gap-4 p-5 lg:grid-cols-[1fr_18rem]">
         <label className="space-y-1">
           <span className="form-label">{t("receiptLink")}</span>
           <input
@@ -349,7 +349,7 @@ export function TransactionForm() {
           />
         </label>
         <div className="grid grid-cols-2 gap-3 pt-6">
-          <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-3 text-sm shadow-sm">
             <input
               checked={draft.receipt_required}
               onChange={(event) => setField("receipt_required", event.target.checked)}
@@ -357,7 +357,7 @@ export function TransactionForm() {
             />
             {t("receiptRequired")}
           </label>
-          <label className="flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm">
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-line bg-white px-3 text-sm shadow-sm">
             <input
               checked={draft.reconciled}
               onChange={(event) => setField("reconciled", event.target.checked)}
@@ -368,7 +368,7 @@ export function TransactionForm() {
         </div>
       </section>
 
-      <label className="block space-y-1">
+      <label className="surface-card block space-y-1 p-5">
         <span className="form-label">{t("notes")}</span>
         <textarea
           className="form-textarea"
@@ -377,7 +377,7 @@ export function TransactionForm() {
         />
       </label>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-line bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="surface-card flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={suggestedRule.category === "Uncategorized" ? "amber" : "blue"}>
             {categoryLabel(suggestedRule.category)}

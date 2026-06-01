@@ -20,7 +20,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        "inline-flex min-h-6 items-center rounded-md border px-2 py-0.5 text-xs font-semibold",
+        "inline-flex min-h-6 items-center rounded-full border px-2.5 py-0.5 text-[0.72rem] font-semibold leading-none shadow-sm",
         tones[tone]
       )}
     >
@@ -28,3 +28,5 @@ export function Badge({
     </span>
   );
 }
+
+export const StatusBadge = Badge;

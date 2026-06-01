@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { PermissionNotice } from "@/components/permission-notice";
 import { ReconciliationLink } from "@/components/reconciliation-link";
 import { TransactionsTable } from "@/components/transactions-table";
-import { ActionPanel, CommandCard, SectionHeader } from "@/components/ui-primitives";
+import { AlertBanner, CommandCard, QuickActionCard, SectionCard, SectionHeader } from "@/components/ui-primitives";
 import { filterByYear, getDashboardStats } from "@/lib/calculations";
 import { downloadExcel } from "@/lib/export-excel";
 import { formatCurrency } from "@/lib/format";
@@ -18,7 +18,7 @@ import { useBookkeeping } from "@/lib/storage";
 
 export default function DashboardPage() {
   const { monthlyClosings, permissions, recordExportAudit, transactions, settings } = useBookkeeping();
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const yearTransactions = filterByYear(transactions, settings.tax_year);
   const stats = getDashboardStats(yearTransactions);
   const recentTransactions = transactions.slice(0, 6);
@@ -39,6 +39,7 @@ export default function DashboardPage() {
       needsReviewCount * 6 -
       reopenedCount * 12
   );
+  const unresolvedItems = stats.unreconciled_count + stats.receipts_missing_count + needsReviewCount + reopenedCount;
   const dashboardExportFileName = `${settings.tax_year}-bookkeeping.xls`;
 
   async function exportDashboardReport() {
@@ -100,7 +101,27 @@ export default function DashboardPage() {
         />
       </section>
 
-      <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
+      {unresolvedItems ? (
+        <AlertBanner tone={closeReadiness >= 70 ? "warning" : "danger"}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-semibold text-ink">
+                {language === "zh" ? `月结前还有 ${unresolvedItems} 个未解决事项` : `${unresolvedItems} unresolved items before month close`}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {language === "zh"
+                  ? "缺失收据、未核对交易、复核标记和重新打开的月份正在等待财务复核。"
+                  : "Missing receipts, unreconciled transactions, review flags, and reopened months are waiting for finance review."}
+              </p>
+            </div>
+            <Link className={buttonClassName()} href="/reconciliation">
+              {t("openReconciliationCenter")}
+            </Link>
+          </div>
+        </AlertBanner>
+      ) : (
+        <ReconciliationLink descriptionKey="reconciliationCenterDashboardNotice" />
+      )}
 
       {!permissions.canEditTransactions ? <PermissionNotice /> : null}
 
@@ -127,30 +148,53 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <ActionPanel description={t("quickActionsHelp")} title={t("quickActions")}>
-          {permissions.canEditTransactions ? (
-            <Link className={buttonClassName("primary", "w-full justify-start")} href="/transactions/new">
-              <PlusCircle aria-hidden="true" className="h-4 w-4" />
-              {t("addTransaction")}
-            </Link>
-          ) : null}
-          {permissions.canEditTransactions ? (
-            <Link className={buttonClassName("secondary", "w-full justify-start")} href="/imports/mercury">
-              <Upload aria-hidden="true" className="h-4 w-4" />
-              {t("importMercuryCsv")}
-            </Link>
-          ) : null}
-          {permissions.canUploadReceipts ? (
-            <Link className={buttonClassName("secondary", "w-full justify-start")} href="/receipts">
-              <ReceiptText aria-hidden="true" className="h-4 w-4" />
-              {t("uploadReceipt")}
-            </Link>
-          ) : null}
-          <Link className={buttonClassName("secondary", "w-full justify-start")} href="/reconciliation">
-            <Wand2 aria-hidden="true" className="h-4 w-4" />
-            {t("openReconciliationCenter")}
-          </Link>
-        </ActionPanel>
+        <SectionCard className="space-y-4">
+          <SectionHeader description={t("quickActionsHelp")} title={t("quickActions")} />
+          <div className="grid gap-3">
+            {permissions.canEditTransactions ? (
+              <QuickActionCard
+                description={language === "zh" ? "用规则辅助分类记录单笔账务事件。" : "Capture a one-off ledger event with rules-assisted categorization."}
+                icon={<PlusCircle aria-hidden="true" className="h-5 w-5" />}
+                title={t("addTransaction")}
+              >
+                <Link className={buttonClassName("primary", "w-full justify-start")} href="/transactions/new">
+                  {t("addTransaction")}
+                </Link>
+              </QuickActionCard>
+            ) : null}
+            {permissions.canEditTransactions ? (
+              <QuickActionCard
+                description={language === "zh" ? "将 Mercury CSV 活动导入运营账本。" : "Bring Mercury CSV activity into the operating ledger."}
+                icon={<Upload aria-hidden="true" className="h-5 w-5" />}
+                title={t("importMercuryCsv")}
+              >
+                <Link className={buttonClassName("secondary", "w-full justify-start")} href="/imports/mercury">
+                  {t("importMercuryCsv")}
+                </Link>
+              </QuickActionCard>
+            ) : null}
+            {permissions.canUploadReceipts ? (
+              <QuickActionCard
+                description={language === "zh" ? "为支出附上凭证，保持 CPA 交接清晰。" : "Attach proof for expenses and keep CPA handoff clean."}
+                icon={<ReceiptText aria-hidden="true" className="h-5 w-5" />}
+                title={t("uploadReceipt")}
+              >
+                <Link className={buttonClassName("secondary", "w-full justify-start")} href="/receipts">
+                  {t("uploadReceipt")}
+                </Link>
+              </QuickActionCard>
+            ) : null}
+            <QuickActionCard
+              description={language === "zh" ? "处理收据、分类、重复项和核对异常。" : "Resolve receipts, categories, duplicates, and reconciliation exceptions."}
+              icon={<Wand2 aria-hidden="true" className="h-5 w-5" />}
+              title={t("openReconciliationCenter")}
+            >
+              <Link className={buttonClassName("secondary", "w-full justify-start")} href="/reconciliation">
+                {t("openReconciliationCenter")}
+              </Link>
+            </QuickActionCard>
+          </div>
+        </SectionCard>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-3">
@@ -176,7 +220,7 @@ export default function DashboardPage() {
         />
       </section>
 
-      <section className="surface-card p-4">
+      <section className="surface-card p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="section-title">{t("bookkeepingHealth")}</h2>

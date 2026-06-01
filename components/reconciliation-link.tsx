@@ -35,11 +35,14 @@ export function ReconciliationLink({
   }
 
   return (
-    <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+    <section className="relative overflow-hidden rounded-lg border border-amber-200 bg-white p-4 shadow-soft">
+      <span className="absolute inset-y-0 left-0 w-1 bg-amber-500" />
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex gap-3">
-          <AlertTriangle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
-          <p className="text-sm leading-6 text-amber-900">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+            <AlertTriangle aria-hidden="true" className="h-5 w-5" />
+          </div>
+          <p className="text-sm leading-6 text-slate-700">
             {t(descriptionKey).replace(
               "{count}",
               String(reconciliationData.summary.unresolvedIssueCount)
