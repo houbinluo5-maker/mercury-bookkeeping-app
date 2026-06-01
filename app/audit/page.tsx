@@ -16,7 +16,8 @@ import {
   auditSourceLabelKey,
   auditSources,
   describeAuditEntry,
-  filterAuditLogsForRole
+  filterAuditLogsForRole,
+  formatAuditTime
 } from "@/lib/audit";
 import { useI18n } from "@/lib/i18n";
 import { useBookkeeping } from "@/lib/storage";
@@ -56,7 +57,7 @@ function badgeTone(label: string): "neutral" | "green" | "amber" | "red" | "blue
   return "neutral";
 }
 
-function csvRows(entries: AuditLog[]) {
+function csvRows(entries: AuditLog[], language: "en" | "zh") {
   return entries.map((entry) => [
     entry.created_at,
     entry.workspace_id ?? "",
@@ -67,14 +68,14 @@ function csvRows(entries: AuditLog[]) {
     entry.action,
     entry.source,
     auditResult(entry),
-    describeAuditEntry(entry),
+    describeAuditEntry(entry, language),
     entry.reason
   ]);
 }
 
 export default function AuditPage() {
   const { auditLogs, permissions, recordExportAudit, settings, workspaceRole } = useBookkeeping();
-  const { t } = useI18n();
+  const { language, t } = useI18n();
   const [query, setQuery] = useState("");
   const [actorEmail, setActorEmail] = useState("");
   const [startDate, setStartDate] = useState(`${settings.tax_year}-01-01`);
@@ -96,7 +97,8 @@ export default function AuditPage() {
 
     return visibleEntries.filter((entry) => {
       const auditDate = entry.created_at.slice(0, 10);
-      const detailText = describeAuditEntry(entry);
+      const detailText = describeAuditEntry(entry, language);
+      const displayTime = formatAuditTime(entry.created_at, language);
 
       if (startDate && auditDate < startDate) return false;
       if (endDate && auditDate > endDate) return false;
@@ -110,6 +112,7 @@ export default function AuditPage() {
 
       return [
         entry.created_at,
+        displayTime,
         entry.workspace_id,
         actorLabel(entry),
         roleLabel(entry),
@@ -126,7 +129,7 @@ export default function AuditPage() {
         .toLowerCase()
         .includes(normalizedQuery);
     });
-  }, [action, actorEmail, endDate, entityType, query, result, source, startDate, visibleEntries]);
+  }, [action, actorEmail, endDate, entityType, language, query, result, source, startDate, visibleEntries]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
   const currentPage = Math.min(page, totalPages - 1);
@@ -144,7 +147,7 @@ export default function AuditPage() {
 
     if (!allowed) return;
 
-    downloadCsv(csvHeaders, csvRows(filteredEntries), fileName);
+    downloadCsv(csvHeaders, csvRows(filteredEntries, language), fileName);
   }
 
   if (!permissions.canViewAuditTrail) {
@@ -298,7 +301,8 @@ export default function AuditPage() {
               {pageEntries.map((entry) => (
                 <tr className="hover:bg-slate-50" key={entry.id}>
                   <td className="table-cell whitespace-nowrap text-sm text-slate-600">
-                    {entry.created_at.replace("T", " ").slice(0, 16)}
+                    <p>{formatAuditTime(entry.created_at, language)}</p>
+                    <p className="mt-1 text-xs text-slate-400">{t("beijingTime")}</p>
                   </td>
                   <td className="table-cell min-w-52">
                     <p className="font-medium text-ink">{actorLabel(entry)}</p>
@@ -328,7 +332,7 @@ export default function AuditPage() {
                     {t(auditSourceLabelKey(entry.source))}
                   </td>
                   <td className="table-cell min-w-96 text-sm text-slate-700">
-                    <p>{describeAuditEntry(entry)}</p>
+                    <p>{describeAuditEntry(entry, language)}</p>
                     {entry.reason ? <p className="mt-1 text-xs text-slate-500">{entry.reason}</p> : null}
                   </td>
                 </tr>

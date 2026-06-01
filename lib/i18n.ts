@@ -616,6 +616,7 @@ const translations: Record<Language, Record<string, string>> = {
     exportAuditLogCsv: "Export audit log CSV",
     timestamp: "Timestamp",
     time: "Time",
+    beijingTime: "UTC+8",
     entityId: "Entity ID",
     field: "Field",
     oldValue: "Old value",
@@ -1462,7 +1463,9 @@ const authZhOverrides: Record<string, string> = {
   workspaceOwnerStatus: "工作区所有者",
   workspaceOwnership: "工作区所有权",
   claimThisWorkspace: "认领此工作区",
-  claimingWorkspace: "正在认领..."
+  claimingWorkspace: "正在认领...",
+  beijingTime: "北京时间",
+  time: "时间"
 };
 
 export function translate(language: Language, key: string) {

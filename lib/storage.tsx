@@ -14,6 +14,7 @@ import {
   createAuditEntry,
   mergeAuditLogs,
   normalizeAuditLogs,
+  transactionAuditDetails,
   transactionSummary,
   type SettingsAuditOptions,
   type TransactionAuditOptions
@@ -1438,10 +1439,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           actor: audit.actor ?? "admin",
           ...auditEntryIdentity,
           created_at: now,
-          details: {
-            result: "success",
-            summary: transactionSummary(transaction)
-          },
+          details: transactionAuditDetails(transaction, { result: "success" }),
           entity_id: transaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1511,11 +1509,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           actor: audit.actor ?? "system",
           ...auditEntryIdentity,
           created_at: now,
-          details: {
+          details: transactionAuditDetails(transaction, {
             result: "success",
-            source: audit.source ?? "csv_import",
-            summary: transactionSummary(transaction)
-          },
+            source: audit.source ?? "csv_import"
+          }),
           entity_id: transaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1744,10 +1741,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           actor: audit.actor ?? "admin",
           ...auditEntryIdentity,
           created_at: timestamp,
-          details: {
-            result: "success",
-            summary: transactionSummary(currentTransaction)
-          },
+          details: transactionAuditDetails(currentTransaction, { result: "success" }),
           entity_id: currentTransaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1830,10 +1824,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         actor: "admin",
         ...auditEntryIdentity,
         created_at: timestamp,
-        details: {
-          result: "success",
-          summary: transactionSummary(transaction)
-        },
+        details: transactionAuditDetails(transaction, { result: "success" }),
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",
@@ -1875,10 +1866,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         actor: "admin",
         ...auditEntryIdentity,
         created_at: timestamp,
-        details: {
-          result: "success",
-          summary: transactionSummary(transaction)
-        },
+        details: transactionAuditDetails(transaction, { result: "success" }),
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",
@@ -1894,10 +1882,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         actor: "system",
         ...auditEntryIdentity,
         created_at: timestamp,
-        details: {
-          result: "success",
-          summary: transactionSummary(transaction)
-        },
+        details: transactionAuditDetails(transaction, { result: "success" }),
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",

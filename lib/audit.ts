@@ -7,6 +7,7 @@ import type {
   AuditEntityType,
   AuditLog,
   AuditSource,
+  Language,
   Transaction,
   TransactionDraft,
   WorkspaceRole
@@ -256,6 +257,75 @@ export function transactionSummary(transaction: Pick<Transaction, "date" | "vend
     .join(" | ");
 }
 
+type TransactionAuditDetailInput = Pick<
+  Transaction,
+  | "category"
+  | "currency"
+  | "date"
+  | "description"
+  | "money_in"
+  | "money_out"
+  | "receipt_link"
+  | "receipt_required"
+  | "reconciled"
+  | "source"
+  | "vendor"
+>;
+
+function transactionAmount(transaction: Pick<Transaction, "money_in" | "money_out">) {
+  return transaction.money_in > 0 ? transaction.money_in : transaction.money_out;
+}
+
+function transactionType(transaction: Pick<Transaction, "money_in" | "money_out">): "income" | "expense" {
+  return transaction.money_in > 0 ? "income" : "expense";
+}
+
+function transactionReceiptStatus(transaction: Pick<Transaction, "receipt_link" | "receipt_required">) {
+  if (transaction.receipt_link) return "attached";
+  if (transaction.receipt_required) return "missing_receipt";
+  return "not_required";
+}
+
+export function transactionAuditDetails(
+  transaction: TransactionAuditDetailInput,
+  extra: AuditDetails = {}
+): AuditDetails {
+  const merchant = transaction.vendor || transaction.source || transaction.description || "Transaction";
+  const sourceName = transaction.source && transaction.source !== merchant ? transaction.source : "";
+  const type = transactionType(transaction);
+  const amount = transactionAmount(transaction);
+  const receiptStatus = transactionReceiptStatus(transaction);
+  const reconciliationStatus = transaction.reconciled ? "reconciled" : "unreconciled";
+  const details = {
+    transaction_date: transaction.date,
+    merchant,
+    source_name: sourceName,
+    description: transaction.description,
+    category: transaction.category,
+    type,
+    amount,
+    currency: transaction.currency,
+    receipt_status: receiptStatus,
+    reconciliation_status: reconciliationStatus,
+    summary: transactionSummary(transaction),
+    transaction: {
+      transaction_date: transaction.date,
+      merchant,
+      source_name: sourceName,
+      description: transaction.description,
+      category: transaction.category,
+      type,
+      amount,
+      currency: transaction.currency,
+      receipt_status: receiptStatus,
+      reconciliation_status: reconciliationStatus
+    },
+    ...extra
+  };
+
+  return sanitizeAuditDetails(details);
+}
+
 export function createAuditEntry(
   input: Omit<AuditLog, "created_at" | "id"> & { created_at?: string; id?: string }
 ) {
@@ -305,13 +375,17 @@ export function buildTransactionAuditLogs(
   next: Transaction,
   options: TransactionAuditOptions = {}
 ) {
+  const transactionDetails = transactionAuditDetails(next, options.details);
   const entries = trackedTransactionFields.flatMap((fieldName) => {
     const oldValue = asAuditValue(previous[fieldName]);
     const newValue = asAuditValue(next[fieldName]);
 
     if (oldValue === newValue) return [];
 
-    return [buildFieldEntry(next.id, fieldName, oldValue, newValue, options)];
+    return [buildFieldEntry(next.id, fieldName, oldValue, newValue, {
+      ...options,
+      details: transactionDetails
+    })];
   });
 
   return mergeAuditLogs(
@@ -325,7 +399,7 @@ export function buildTransactionAuditLogs(
         actor_user_id: entry.actor_user_id ?? options.actorUserId,
         created_at: entry.created_at ?? options.createdAt,
         details: {
-          ...options.details,
+          ...transactionDetails,
           ...sanitizeAuditDetails(entry.details),
           result: "success"
         },
@@ -451,6 +525,12 @@ function detailText(entry: AuditLog, key: string) {
   return "";
 }
 
+function asDetailRecord(value: AuditDetailValue | undefined): Record<string, AuditDetailValue> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  return value;
+}
+
 function parsedNewValue(entry: AuditLog) {
   if (!entry.new_value || !entry.new_value.trim().startsWith("{")) return {};
 
@@ -463,6 +543,225 @@ function parsedNewValue(entry: AuditLog) {
 
 function exportTypeLabel(value: string) {
   return value.replace(/_/g, " ");
+}
+
+export function formatAuditTime(createdAt: string, language: Language = "en") {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return createdAt || "-";
+
+  if (language === "zh") {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-US", {
+        day: "numeric",
+        hour: "2-digit",
+        hourCycle: "h23",
+        minute: "2-digit",
+        month: "numeric",
+        timeZone: "Asia/Shanghai",
+        year: "numeric"
+      }).formatToParts(date).map((part) => [part.type, part.value])
+    );
+
+    return `${parts.year}年${parts.month}月${parts.day}日 ${parts.hour}:${parts.minute}`;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    hour: "2-digit",
+    hourCycle: "h23",
+    minute: "2-digit",
+    month: "short",
+    timeZone: "Asia/Shanghai",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatTransactionDate(value: string, language: Language) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!match) return value;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day, 12));
+
+  if (Number.isNaN(date.getTime())) return value;
+  if (language === "zh") return `${year}年${month}月${day}日`;
+
+  return new Intl.DateTimeFormat("en-US", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+    year: "numeric"
+  }).format(date);
+}
+
+function formatAuditAmount(value: string, currency: string) {
+  if (!value.trim()) return "";
+
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return "";
+
+  try {
+    return new Intl.NumberFormat("en-US", {
+      currency: currency || "USD",
+      currencyDisplay: "narrowSymbol",
+      style: "currency"
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency || "USD"}`;
+  }
+}
+
+function transactionTypeLabel(value: string, language: Language) {
+  if (value === "income") return language === "zh" ? "收入" : "income";
+  if (value === "expense") return language === "zh" ? "支出" : "expense";
+
+  return value;
+}
+
+function receiptStatusLabel(value: string, language: Language) {
+  if (value === "attached") return language === "zh" ? "已上传收据" : "receipt attached";
+  if (value === "missing_receipt") return language === "zh" ? "缺失收据" : "missing receipt";
+  if (value === "not_required") return language === "zh" ? "无需收据" : "receipt not required";
+
+  return value.replace(/_/g, " ");
+}
+
+function reconciliationStatusLabel(value: string, language: Language) {
+  if (value === "reconciled") return language === "zh" ? "已核对" : "reconciled";
+  if (value === "unreconciled") return language === "zh" ? "未核对" : "unreconciled";
+
+  return value.replace(/_/g, " ");
+}
+
+function parseTransactionSummary(summary: string): Record<string, AuditDetailValue> {
+  const [transactionDate, merchant, directionAmountCurrency, category] = summary
+    .split("|")
+    .map((part) => part.trim());
+  const amountMatch = /^(in|out)\s+(-?\d+(?:\.\d+)?)\s+([A-Z]{3})$/i.exec(directionAmountCurrency ?? "");
+
+  return sanitizeAuditDetails({
+    transaction_date: transactionDate,
+    merchant,
+    category,
+    type: amountMatch?.[1]?.toLowerCase() === "in" ? "income" : amountMatch ? "expense" : "",
+    amount: amountMatch ? Number(amountMatch[2]) : "",
+    currency: amountMatch?.[3] ?? ""
+  });
+}
+
+function readTransactionDetail(details: Record<string, AuditDetailValue>, key: string) {
+  const transaction = asDetailRecord(details.transaction);
+  const value = details[key] ?? transaction[key];
+
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+  return "";
+}
+
+function transactionDetailsFromEntry(entry: AuditLog) {
+  const details = { ...parsedNewValue(entry), ...(entry.details ?? {}) } as Record<string, AuditDetailValue>;
+  const summaryValue = details.summary ?? (entry.new_value || entry.old_value || "");
+  const summaryText = String(summaryValue);
+  const parsedSummary = parseTransactionSummary(summaryText);
+  const merged = { ...parsedSummary, ...details } as Record<string, AuditDetailValue>;
+  const merchant = readTransactionDetail(merged, "merchant") ||
+    readTransactionDetail(merged, "vendor") ||
+    readTransactionDetail(merged, "source_name") ||
+    readTransactionDetail(merged, "description");
+  const sourceName = readTransactionDetail(merged, "source_name");
+  const description = readTransactionDetail(merged, "description");
+
+  return {
+    amount: readTransactionDetail(merged, "amount"),
+    category: readTransactionDetail(merged, "category") || description,
+    currency: readTransactionDetail(merged, "currency") || "USD",
+    date: readTransactionDetail(merged, "transaction_date") || readTransactionDetail(merged, "date"),
+    description,
+    merchant,
+    receiptStatus: readTransactionDetail(merged, "receipt_status"),
+    reconciliationStatus: readTransactionDetail(merged, "reconciliation_status"),
+    sourceName,
+    type: readTransactionDetail(merged, "type")
+  };
+}
+
+function transactionMerchantText(
+  transaction: ReturnType<typeof transactionDetailsFromEntry>,
+  language: Language
+) {
+  if (!transaction.merchant) return "";
+  if (language === "zh" && transaction.sourceName && transaction.sourceName !== transaction.merchant) {
+    return `${transaction.merchant} ${transaction.sourceName}`;
+  }
+
+  return transaction.merchant;
+}
+
+function transactionTypeAmountText(
+  transaction: ReturnType<typeof transactionDetailsFromEntry>,
+  language: Language
+) {
+  const type = transactionTypeLabel(transaction.type, language);
+  const amount = formatAuditAmount(transaction.amount, transaction.currency);
+
+  return [type, amount].filter(Boolean).join(" ");
+}
+
+function transactionParts(
+  entry: AuditLog,
+  language: Language,
+  options: { includeStatus?: boolean } = {}
+) {
+  const transaction = transactionDetailsFromEntry(entry);
+  const parts = [
+    transactionMerchantText(transaction, language),
+    transaction.category,
+    transactionTypeAmountText(transaction, language),
+    transaction.date ? `${language === "zh" ? "日期" : "date"} ${formatTransactionDate(transaction.date, language)}` : "",
+    options.includeStatus && transaction.reconciliationStatus
+      ? reconciliationStatusLabel(transaction.reconciliationStatus, language)
+      : "",
+    options.includeStatus && transaction.receiptStatus
+      ? receiptStatusLabel(transaction.receiptStatus, language)
+      : ""
+  ];
+
+  return parts.filter(Boolean);
+}
+
+function transactionSubject(entry: AuditLog, language: Language) {
+  const transaction = transactionDetailsFromEntry(entry);
+  const subject = [
+    transactionMerchantText(transaction, language),
+    transactionTypeAmountText(transaction, language)
+  ].filter(Boolean);
+
+  return subject.length ? subject.join(language === "zh" ? "，" : ", ") : `transaction ${entry.entity_id}`;
+}
+
+function createdTransactionDescription(entry: AuditLog, language: Language) {
+  const parts = transactionParts(entry, language, { includeStatus: true });
+  if (!parts.length) {
+    return language === "zh" ? `创建交易 ${entry.entity_id}。` : `Created transaction ${entry.entity_id}.`;
+  }
+
+  return language === "zh"
+    ? `创建交易：${parts.join("，")}。`
+    : `Created transaction: ${parts.join(", ")}.`;
+}
+
+function deletedTransactionDescription(entry: AuditLog, language: Language) {
+  const parts = transactionParts(entry, language);
+  if (!parts.length) {
+    return language === "zh" ? `删除交易 ${entry.entity_id}。` : `Deleted transaction ${entry.entity_id}.`;
+  }
+
+  return language === "zh"
+    ? `删除交易：${parts.join("，")}。`
+    : `Deleted transaction: ${parts.join(", ")}.`;
 }
 
 export function auditResult(entry: AuditLog): "denied" | "success" {
@@ -488,63 +787,105 @@ export function auditBadgeLabels(entry: AuditLog) {
   return Array.from(labels);
 }
 
-export function describeAuditEntry(entry: AuditLog) {
+export function describeAuditEntry(entry: AuditLog, language: Language = "en") {
   const details = { ...parsedNewValue(entry), ...(entry.details ?? {}) };
   const exportType = String(details.export_type ?? entry.field_name ?? "");
   const reportPeriod = String(details.report_period ?? "");
 
   if (entry.action === "member_role_changed") {
-    return `Changed role from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
+    return language === "zh"
+      ? `将角色从 ${displayAuditValue(entry.old_value)} 改为 ${displayAuditValue(entry.new_value)}。`
+      : `Changed role from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
   }
 
   if (entry.action === "workspace_switched") {
     const fromWorkspace = String(details.from_workspace_id ?? entry.old_value);
     const toWorkspace = String(details.to_workspace_id ?? entry.new_value);
-    return `Switched workspace from ${displayAuditValue(fromWorkspace)} to ${displayAuditValue(toWorkspace)}.`;
+    return language === "zh"
+      ? `从工作区 ${displayAuditValue(fromWorkspace)} 切换到 ${displayAuditValue(toWorkspace)}。`
+      : `Switched workspace from ${displayAuditValue(fromWorkspace)} to ${displayAuditValue(toWorkspace)}.`;
   }
 
   if (entry.action === "permission_denied") {
-    return `Denied permission attempt: ${entry.new_value || entry.field_name || "restricted action"}.`;
+    const attempt = entry.new_value || entry.field_name || "restricted action";
+    return language === "zh" ? `拒绝权限尝试：${attempt}。` : `Denied permission attempt: ${attempt}.`;
   }
 
   if (entry.action === "export_denied") {
-    return `Denied export attempt: ${displayAuditValue(entry.old_value)} cannot export ${exportTypeLabel(exportType || "this data")}.`;
+    return language === "zh"
+      ? `拒绝导出尝试：${displayAuditValue(entry.old_value)} 不能导出 ${exportTypeLabel(exportType || "this data")}。`
+      : `Denied export attempt: ${displayAuditValue(entry.old_value)} cannot export ${exportTypeLabel(exportType || "this data")}.`;
   }
 
   if (entry.action.endsWith("_exported") || entry.action === "report_exported") {
-    return `Exported ${exportTypeLabel(exportType || entry.action)}${reportPeriod ? ` for ${reportPeriod}` : ""}.`;
+    return language === "zh"
+      ? `已导出 ${exportTypeLabel(exportType || entry.action)}${reportPeriod ? `，期间 ${reportPeriod}` : ""}。`
+      : `Exported ${exportTypeLabel(exportType || entry.action)}${reportPeriod ? ` for ${reportPeriod}` : ""}.`;
   }
 
-  if (entry.action === "month_closed") return `Closed month ${entry.entity_id}.`;
-  if (entry.action === "month_reopened") return `Reopened month ${entry.entity_id}.`;
-  if (entry.action === "close_note_updated") return `Updated close note for ${entry.entity_id}.`;
-  if (entry.action === "mark_reconciled") return "Marked transaction reconciled.";
-  if (entry.action === "mark_unreconciled") return "Marked transaction unreconciled.";
-  if (entry.action === "mark_receipt_not_required") return "Marked receipt not required.";
-  if (entry.action === "resolve_review") return "Resolved review item.";
-  if (entry.action === "dismiss_duplicate") return "Dismissed duplicate candidate.";
-  if (entry.action === "upload_receipt") return "Uploaded receipt file.";
-  if (entry.action === "replace_receipt") return "Replaced receipt file.";
-  if (entry.action === "delete_receipt") return "Deleted receipt file.";
-  if (entry.action === "manual_link_receipt") return "Linked receipt manually.";
+  if (entry.entity_type === "transaction" && entry.action === "create") {
+    return createdTransactionDescription(entry, language);
+  }
+  if (entry.entity_type === "transaction" && entry.action === "delete") {
+    return deletedTransactionDescription(entry, language);
+  }
+
+  if (entry.action === "month_closed") return language === "zh" ? `关闭月份 ${entry.entity_id}。` : `Closed month ${entry.entity_id}.`;
+  if (entry.action === "month_reopened") return language === "zh" ? `重新打开月份 ${entry.entity_id}。` : `Reopened month ${entry.entity_id}.`;
+  if (entry.action === "close_note_updated") return language === "zh" ? `更新 ${entry.entity_id} 的结账备注。` : `Updated close note for ${entry.entity_id}.`;
+  if (entry.action === "mark_reconciled") {
+    return language === "zh"
+      ? `标记交易已核对：${transactionSubject(entry, language)}。`
+      : `Marked transaction reconciled: ${transactionSubject(entry, language)}.`;
+  }
+  if (entry.action === "mark_unreconciled") {
+    return language === "zh"
+      ? `标记交易未核对：${transactionSubject(entry, language)}。`
+      : `Marked transaction unreconciled: ${transactionSubject(entry, language)}.`;
+  }
+  if (entry.action === "mark_receipt_not_required") {
+    return language === "zh"
+      ? `标记交易无需收据：${transactionSubject(entry, language)}。`
+      : `Marked receipt not required for ${transactionSubject(entry, language)}.`;
+  }
+  if (entry.action === "resolve_review") return language === "zh" ? "已解决复核事项。" : "Resolved review item.";
+  if (entry.action === "dismiss_duplicate") return language === "zh" ? "已忽略重复候选。" : "Dismissed duplicate candidate.";
+  if (entry.action === "upload_receipt") return language === "zh" ? `上传收据文件：${transactionSubject(entry, language)}。` : `Uploaded receipt file for ${transactionSubject(entry, language)}.`;
+  if (entry.action === "replace_receipt") return language === "zh" ? `替换收据文件：${transactionSubject(entry, language)}。` : `Replaced receipt file for ${transactionSubject(entry, language)}.`;
+  if (entry.action === "delete_receipt") return language === "zh" ? `删除收据文件：${transactionSubject(entry, language)}。` : `Deleted receipt file for ${transactionSubject(entry, language)}.`;
+  if (entry.action === "manual_link_receipt") return language === "zh" ? `手动关联收据：${transactionSubject(entry, language)}。` : `Linked receipt manually for ${transactionSubject(entry, language)}.`;
   if (entry.action === "category_change") {
-    return `Changed category from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
+    return language === "zh"
+      ? `更改交易分类：${transactionSubject(entry, language)}，${displayAuditValue(entry.old_value)} → ${displayAuditValue(entry.new_value)}。`
+      : `Changed category for ${transactionSubject(entry, language)}: ${displayAuditValue(entry.old_value)} -> ${displayAuditValue(entry.new_value)}.`;
   }
   if (entry.action === "tax_line_change") {
-    return `Changed tax line from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
+    return language === "zh"
+      ? `更改税务科目：${transactionSubject(entry, language)}，${displayAuditValue(entry.old_value)} → ${displayAuditValue(entry.new_value)}。`
+      : `Changed tax line for ${transactionSubject(entry, language)}: ${displayAuditValue(entry.old_value)} -> ${displayAuditValue(entry.new_value)}.`;
   }
-  if (entry.action === "note_change") return "Updated transaction note.";
+  if (entry.action === "note_change") {
+    return language === "zh"
+      ? `更新交易备注：${transactionSubject(entry, language)}。`
+      : `Updated transaction note for ${transactionSubject(entry, language)}.`;
+  }
   if (entry.action === "settings_updated") {
-    return `Updated ${entry.field_name || "workspace settings"}.`;
+    return language === "zh" ? `更新 ${entry.field_name || "工作区设置"}。` : `Updated ${entry.field_name || "workspace settings"}.`;
   }
-  if (entry.action === "workspace_claimed") return "Claimed legacy workspace.";
-  if (entry.action === "member_invited") return `Invited workspace member${entry.new_value ? `: ${entry.new_value}` : ""}.`;
-  if (entry.action === "invitation_accepted") return "Accepted workspace invitation.";
-  if (entry.action === "invitation_revoked") return "Revoked workspace invitation.";
-  if (entry.action === "member_removed") return "Removed workspace member.";
+  if (entry.action === "workspace_claimed") return language === "zh" ? "认领旧工作区。" : "Claimed legacy workspace.";
+  if (entry.action === "member_invited") {
+    return language === "zh"
+      ? `邀请工作区成员${entry.new_value ? `：${entry.new_value}` : ""}。`
+      : `Invited workspace member${entry.new_value ? `: ${entry.new_value}` : ""}.`;
+  }
+  if (entry.action === "invitation_accepted") return language === "zh" ? "接受工作区邀请。" : "Accepted workspace invitation.";
+  if (entry.action === "invitation_revoked") return language === "zh" ? "撤销工作区邀请。" : "Revoked workspace invitation.";
+  if (entry.action === "member_removed") return language === "zh" ? "移除工作区成员。" : "Removed workspace member.";
 
   if (entry.field_name) {
-    return `Changed ${entry.field_name} from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
+    return language === "zh"
+      ? `更改 ${entry.field_name}：${displayAuditValue(entry.old_value)} → ${displayAuditValue(entry.new_value)}。`
+      : `Changed ${entry.field_name} from ${displayAuditValue(entry.old_value)} to ${displayAuditValue(entry.new_value)}.`;
   }
 
   return entry.reason || `${entry.action.replace(/_/g, " ")}.`;
