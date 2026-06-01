@@ -31,6 +31,18 @@ function readEntityType(record: JsonRecord) {
     : undefined;
 }
 
+function readFileFormat(record: JsonRecord) {
+  const value = record.fileFormat;
+
+  return value === "csv" || value === "json" || value === "xlsx" ? value : undefined;
+}
+
+function readRowCount(record: JsonRecord) {
+  const value = Number(record.rowCount);
+
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
 
@@ -58,8 +70,10 @@ export async function POST(request: NextRequest) {
     entityId: readText(body, "entityId"),
     entityType: readEntityType(body),
     exportType,
+    fileFormat: readFileFormat(body),
     fileName: readText(body, "fileName", 240),
-    reportPeriod: readText(body, "reportPeriod")
+    reportPeriod: readText(body, "reportPeriod"),
+    rowCount: readRowCount(body)
   };
   const allowed = canExportLedgerData(auth.membership, exportType);
   const auditLog = await logExportAudit(auth, details, allowed ? "success" : "denied");

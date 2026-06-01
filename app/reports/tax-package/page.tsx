@@ -176,18 +176,23 @@ export default function TaxPackagePage() {
   }
 
   async function exportTaxPackageWorkbook() {
-    const fileName = `${prefix}-workbook.xls`;
+    const fileName = `${prefix}-workbook.xlsx`;
     const allowed = await recordExportAudit({
       entityId: String(taxYear),
       entityType: "transaction",
       exportType: "tax_package_workbook",
+      fileFormat: "xlsx",
       fileName,
-      reportPeriod: `${startDate} to ${endDate}`
+      reportPeriod: `${startDate} to ${endDate}`,
+      rowCount: taxPackage.filteredTransactions.length
     });
 
     if (!allowed) return;
 
-    downloadTaxPackageWorkbook(taxPackage, fileName);
+    downloadTaxPackageWorkbook(taxPackage, fileName, {
+      auditLogs,
+      reportPeriod: `${startDate} to ${endDate}`
+    });
   }
 
   async function exportTaxPackageCsv(
@@ -200,8 +205,10 @@ export default function TaxPackagePage() {
       entityId: String(taxYear),
       entityType: exportType === "receipt_export" ? "receipt" : "transaction",
       exportType,
+      fileFormat: "csv",
       fileName,
-      reportPeriod: `${startDate} to ${endDate}`
+      reportPeriod: `${startDate} to ${endDate}`,
+      rowCount: rows.length
     });
 
     if (!allowed) return;

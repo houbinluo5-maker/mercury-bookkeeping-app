@@ -429,7 +429,9 @@ export default function SettingsPage() {
       entityId: "local-backup",
       entityType: "workspace",
       exportType: "workspace_backup",
-      fileName
+      fileFormat: "json",
+      fileName,
+      rowCount: transactions.length
     });
 
     if (!allowed) return;
@@ -450,17 +452,19 @@ export default function SettingsPage() {
   }
 
   async function downloadFullLedgerExcel() {
-    const fileName = "bookkeeping-full-export.xls";
+    const fileName = "bookkeeping-full-export.xlsx";
     const allowed = await recordExportAudit({
       entityId: "full-ledger",
       entityType: "workspace",
       exportType: "workspace_backup",
-      fileName
+      fileFormat: "xlsx",
+      fileName,
+      rowCount: transactions.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(transactions, fileName);
+    downloadExcel(transactions, fileName, { title: "罗厚彬记账表 - 完整账本导出" });
   }
 
   async function runHealthCheck() {

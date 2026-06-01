@@ -43,20 +43,25 @@ export default function QuarterlyReportPage() {
   const summary = summarizeTransactions(reportTransactions);
   const rows = groupByCategory(reportTransactions);
   const reportPeriod = `${year}-Q${quarter}`;
-  const exportFileName = `${year}-q${quarter}-report.xls`;
+  const exportFileName = `${year}-q${quarter}-report.xlsx`;
 
   async function exportQuarterlyReport() {
     const allowed = await recordExportAudit({
       entityId: reportPeriod,
       entityType: "transaction",
       exportType: "quarterly_report",
+      fileFormat: "xlsx",
       fileName: exportFileName,
-      reportPeriod
+      reportPeriod,
+      rowCount: reportTransactions.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(reportTransactions, exportFileName);
+    downloadExcel(reportTransactions, exportFileName, {
+      reportPeriod,
+      title: `罗厚彬记账表 - ${reportPeriod} 季度报告`
+    });
   }
 
   return (
