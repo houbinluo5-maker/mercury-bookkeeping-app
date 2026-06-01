@@ -3,11 +3,9 @@ import {
   type ExportAuditDetails,
   type ExportAuditResult
 } from "@/lib/export-audit";
+import { auditActorContext } from "@/lib/audit-server";
 import { appendSupabaseAuditLogs, isSupabaseConfigured } from "@/lib/supabase-server";
-import {
-  normalizeIdentityEmail,
-  type AuthWorkspaceContext
-} from "@/lib/supabase-auth-server";
+import type { AuthWorkspaceContext } from "@/lib/supabase-auth-server";
 import type { AuditLog } from "@/lib/types";
 
 export async function logExportAudit(
@@ -15,12 +13,12 @@ export async function logExportAudit(
   details: ExportAuditDetails,
   result: ExportAuditResult
 ): Promise<AuditLog | null> {
-  const actorEmail = normalizeIdentityEmail(auth.user?.email);
+  const actor = auditActorContext(auth);
   const auditLog = buildExportAuditEntry(details, result, {
-    actorEmail,
-    actorRole: auth.membership?.role ?? "unknown",
-    actorUserId: auth.user?.id,
-    workspaceId: auth.workspace.id
+    actorEmail: actor.actorEmail,
+    actorRole: actor.actorRole,
+    actorUserId: actor.actorUserId,
+    workspaceId: actor.workspaceId
   });
 
   if (!isSupabaseConfigured()) return auditLog;

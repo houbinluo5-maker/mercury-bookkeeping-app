@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { auditActorContext } from "@/lib/audit-server";
 import { logPermissionDenied } from "@/lib/permission-audit-server";
 import {
   canExportLedgerData,
@@ -260,6 +261,7 @@ export async function POST(request: NextRequest) {
       }
 
       const summary = readSummary(body);
+      const actor = auditActorContext(auth);
       const result = await closeSupabaseMonthlyClosing(
         year,
         month,
@@ -272,7 +274,13 @@ export async function POST(request: NextRequest) {
           summary.possible_duplicates_count * 6
         )),
         summary,
-        auth.workspace.id
+        auth.workspace.id,
+        {
+          actor: actor.actorEmail || actor.actorRole,
+          actorEmail: actor.actorEmail,
+          actorRole: actor.actorRole,
+          actorUserId: actor.actorUserId
+        }
       );
 
       return ok({
@@ -287,7 +295,13 @@ export async function POST(request: NextRequest) {
         return forbidden(auth, "monthly_closing.reopen", `${year}-${month}`);
       }
 
-      const result = await reopenSupabaseMonthlyClosing(year, month, readReason(body), auth.workspace.id);
+      const actor = auditActorContext(auth);
+      const result = await reopenSupabaseMonthlyClosing(year, month, readReason(body), auth.workspace.id, {
+        actor: actor.actorEmail || actor.actorRole,
+        actorEmail: actor.actorEmail,
+        actorRole: actor.actorRole,
+        actorUserId: actor.actorUserId
+      });
 
       return ok({
         audit_logs: result.audit_logs,

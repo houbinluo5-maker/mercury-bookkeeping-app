@@ -667,7 +667,14 @@ async function appendWorkspaceClaimAuditLog(user: SupabaseAuthUser, workspace: W
     ...createAuditEntry({
       action: "workspace_claimed",
       actor: normalizedEmail || "admin",
+      actor_role: "owner",
       created_at: now,
+      details: {
+        actor_role: "owner",
+        claimed_by_user_id: user.id,
+        result: "success",
+        workspace_id: workspace.id
+      },
       entity_id: workspace.id,
       entity_type: "workspace",
       field_name: "owner_user_id",

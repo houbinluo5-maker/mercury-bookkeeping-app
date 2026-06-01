@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { normalizeAuditLogs } from "@/lib/audit";
+import { filterAuditLogsForRole, normalizeAuditLogs } from "@/lib/audit";
+import { auditActorContext } from "@/lib/audit-server";
 import { logPermissionDenied } from "@/lib/permission-audit-server";
-import { canEditTransactions, permissionDeniedMessage } from "@/lib/permissions";
+import { canEditTransactions, canViewAuditTrail, permissionDeniedMessage } from "@/lib/permissions";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import {
   appendSupabaseAuditLogs,
@@ -45,6 +46,14 @@ function supabaseNotConfigured() {
   );
 }
 
+async function viewForbidden(auth: Awaited<ReturnType<typeof getAuthenticatedContext>>) {
+  if (auth) {
+    await logPermissionDenied(auth, "audit.view", "workspace", auth.workspace.id);
+  }
+
+  return NextResponse.json({ error: permissionDeniedMessage }, { status: 403 });
+}
+
 function supabaseError(error: unknown) {
   return NextResponse.json(
     {
@@ -58,21 +67,38 @@ function supabaseError(error: unknown) {
   );
 }
 
+function readBoundedInteger(value: string | null, fallback: number, min: number, max: number) {
+  const next = Number(value ?? fallback);
+
+  if (!Number.isFinite(next)) return fallback;
+
+  return Math.max(min, Math.min(max, Math.floor(next)));
+}
+
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedContext(request);
   if (!auth) return unauthorized();
+  if (!canViewAuditTrail(auth.membership)) return viewForbidden(auth);
   if (!isSupabaseConfigured()) return supabaseNotConfigured();
 
   try {
-    const data = await loadSupabaseAuditLogs(auth.workspace.id);
+    const limit = readBoundedInteger(request.nextUrl.searchParams.get("limit"), 100, 1, 500);
+    const offset = readBoundedInteger(request.nextUrl.searchParams.get("offset"), 0, 0, 100_000);
+    const data = filterAuditLogsForRole(
+      await loadSupabaseAuditLogs(auth.workspace.id, { limit, offset }),
+      auth.membership?.role ?? "unknown"
+    );
 
     return NextResponse.json({
       apiStatus: 200,
       apiStatusText: "OK",
       configured: true,
       data,
+      limit,
       mode: "supabase",
-      message: "Audit trail loaded."
+      message: "Audit trail loaded.",
+      offset,
+      returned: data.length
     });
   } catch (error) {
     return supabaseError(error);
@@ -90,7 +116,14 @@ export async function POST(request: NextRequest) {
 
     try {
       const body = (await request.json()) as { entries?: AuditLog[] };
-      entries = normalizeAuditLogs(body.entries);
+      const actor = auditActorContext(auth);
+      entries = normalizeAuditLogs(body.entries).map((entry) => ({
+        ...entry,
+        actor_email: actor.actorEmail || entry.actor_email,
+        actor_role: actor.actorRole,
+        actor_user_id: actor.actorUserId || entry.actor_user_id,
+        workspace_id: actor.workspaceId
+      }));
     } catch {
       return NextResponse.json(
         {

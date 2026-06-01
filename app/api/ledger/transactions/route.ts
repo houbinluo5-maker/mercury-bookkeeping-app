@@ -6,6 +6,7 @@ import {
   auditSources,
   type TransactionAuditOptions
 } from "@/lib/audit";
+import { auditActorContext } from "@/lib/audit-server";
 import { logPermissionDenied } from "@/lib/permission-audit-server";
 import {
   canDeleteTransactions,
@@ -468,9 +469,17 @@ function withAuthenticatedActor<T extends { actor?: AuditActor }>(
   audit: T,
   auth: Awaited<ReturnType<typeof getAuthenticatedContext>>
 ) {
+  if (!auth) return audit;
+
+  const actor = auditActorContext(auth);
+
   return {
     ...audit,
-    actor: auth?.user?.email ?? audit.actor ?? "admin"
+    actor: actor.actorEmail || audit.actor || actor.actorRole,
+    actorEmail: actor.actorEmail,
+    actorRole: actor.actorRole,
+    actorUserId: actor.actorUserId,
+    workspaceId: actor.workspaceId
   };
 }
 

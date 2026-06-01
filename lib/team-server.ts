@@ -177,10 +177,12 @@ async function appendTeamAuditLog({
   newValue,
   oldValue = "",
   reason,
+  actorRole,
   workspaceId
 }: {
   action: AuditAction;
   actor: SupabaseAuthUser;
+  actorRole: WorkspaceRole;
   entityId: string;
   fieldName: string;
   newValue: string;
@@ -193,13 +195,21 @@ async function appendTeamAuditLog({
     ...createAuditEntry({
       action,
       actor: normalizedEmail || "admin",
+      actor_role: actorRole,
       entity_id: entityId,
       entity_type: "workspace",
       field_name: fieldName,
       new_value: newValue,
       old_value: oldValue,
       reason,
-      source: "manual"
+      source: "manual",
+      details: {
+        actor_role: actorRole,
+        field_name: fieldName,
+        new_value: newValue,
+        old_value: oldValue,
+        result: "success"
+      }
     }),
     actor_email: normalizedEmail,
     actor_user_id: actor.id,
@@ -326,6 +336,7 @@ export async function createTeamInvitation(
   await appendTeamAuditLog({
     action: "member_invited",
     actor: user,
+    actorRole: membership.role,
     entityId: savedInvitation.id,
     fieldName: "workspace_invitation",
     newValue: JSON.stringify({ email: normalizedEmail, role }),
@@ -349,7 +360,7 @@ async function loadInvitationById(workspaceId: string, id: string) {
 }
 
 export async function revokeTeamInvitation(auth: AuthWorkspaceContext, invitationId: string) {
-  const { user } = requireOwner(auth);
+  const { membership, user } = requireOwner(auth);
   const invitation = await loadInvitationById(auth.workspace.id, invitationId);
 
   if (!invitation) throw new Error("Invitation was not found.");
@@ -374,6 +385,7 @@ export async function revokeTeamInvitation(auth: AuthWorkspaceContext, invitatio
   await appendTeamAuditLog({
     action: "invitation_revoked",
     actor: user,
+    actorRole: membership.role,
     entityId: invitation.id,
     fieldName: "workspace_invitation",
     newValue: JSON.stringify({ email: invitation.normalized_email, status: "revoked" }),
@@ -419,6 +431,7 @@ export async function removeTeamMember(auth: AuthWorkspaceContext, memberId: str
   await appendTeamAuditLog({
     action: "member_removed",
     actor: user,
+    actorRole: membership.role,
     entityId: member.id,
     fieldName: "workspace_member",
     newValue: JSON.stringify({ email: member.normalized_email || member.email, status: "revoked" }),
@@ -435,7 +448,7 @@ export async function changeTeamMemberRole(
   memberId: string,
   roleValue: string
 ) {
-  const { user } = requireOwner(auth);
+  const { membership, user } = requireOwner(auth);
   const role = normalizeInvitationRole(roleValue);
   const member = await loadMemberById(auth.workspace.id, memberId);
 
@@ -461,6 +474,7 @@ export async function changeTeamMemberRole(
   await appendTeamAuditLog({
     action: "member_role_changed",
     actor: user,
+    actorRole: membership.role,
     entityId: member.id,
     fieldName: "role",
     newValue: role,
@@ -597,6 +611,7 @@ export async function acceptInvitation(token: string, auth: AuthWorkspaceContext
   await appendTeamAuditLog({
     action: "invitation_accepted",
     actor: user,
+    actorRole: membership.role,
     entityId: invitation.id,
     fieldName: "workspace_invitation",
     newValue: JSON.stringify({ email: normalizedEmail, role: invitation.role, status: "accepted" }),
