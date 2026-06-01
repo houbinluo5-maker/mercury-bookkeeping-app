@@ -15,10 +15,12 @@ export type AuditSource =
   | "csv_import"
   | "receipt_upload"
   | "oauth_signup";
+export type WorkspaceRole = "owner" | "admin" | "viewer" | "cpa" | "bookkeeper";
 export type AuditAction =
   | "create"
   | "update"
   | "delete"
+  | "settings_updated"
   | "upload_receipt"
   | "replace_receipt"
   | "delete_receipt"
@@ -31,7 +33,11 @@ export type AuditAction =
   | "resolve_review"
   | "dismiss_duplicate"
   | "note_change"
+  | "month_closed"
+  | "month_reopened"
+  | "close_note_updated"
   | "workspace_claimed"
+  | "workspace_switched"
   | "member_invited"
   | "invitation_accepted"
   | "invitation_revoked"
@@ -45,7 +51,6 @@ export type AuditAction =
   | "workspace_backup_exported"
   | "export_denied";
 
-export type WorkspaceRole = "owner" | "admin" | "viewer" | "cpa" | "bookkeeper";
 export type WorkspaceMemberStatus = "active" | "invited" | "revoked";
 export type WorkspaceInvitationStatus = "invited" | "accepted" | "revoked" | "expired";
 
@@ -95,11 +100,22 @@ export type AppSettings = {
   language: Language;
 };
 
+export type AuditDetailValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AuditDetailValue[]
+  | { [key: string]: AuditDetailValue };
+
+export type AuditDetails = Record<string, AuditDetailValue>;
+
 export type AuditLog = {
   id: string;
   workspace_id?: string;
   actor_user_id?: string;
   actor_email?: string;
+  actor_role?: WorkspaceRole | "unknown";
   entity_type: AuditEntityType;
   entity_id: string;
   action: AuditAction;
@@ -110,6 +126,7 @@ export type AuditLog = {
   created_at: string;
   actor: AuditActor;
   source: AuditSource;
+  details?: AuditDetails;
 };
 
 export type MonthlyClosingSummaryJson = {

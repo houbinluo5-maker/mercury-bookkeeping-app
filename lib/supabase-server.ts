@@ -27,7 +27,8 @@ import type {
   MonthlyClosing,
   MonthlyClosingSummaryJson,
   SupabaseHealthCheck,
-  Transaction
+  Transaction,
+  WorkspaceRole
 } from "@/lib/types";
 
 type SupabaseConfig = {
@@ -61,8 +62,12 @@ type MonthlyClosingRow = MonthlyClosing;
 
 type TransactionCreateAuditOptions = {
   actor?: AuditActor;
+  actorEmail?: string;
+  actorRole?: WorkspaceRole | "unknown";
+  actorUserId?: string;
   reason?: string;
   source?: AuditSource;
+  workspaceId?: string;
 };
 
 type TransactionWriteResult = {
@@ -560,6 +565,18 @@ function failedWriteMessage(action: string, error: unknown, rollbackError?: unkn
   return `${action} failed after a partial Supabase write. ${describeUnknownError(error)}${rollbackMessage}`;
 }
 
+function auditContext(
+  audit: TransactionCreateAuditOptions | TransactionAuditOptions = {},
+  workspaceId?: string
+) {
+  return {
+    actor_email: audit.actorEmail,
+    actor_role: audit.actorRole,
+    actor_user_id: audit.actorUserId,
+    workspace_id: audit.workspaceId ?? workspaceId
+  };
+}
+
 export async function createSupabaseTransaction(
   transaction: Transaction,
   audit: TransactionCreateAuditOptions = {},
@@ -577,7 +594,12 @@ export async function createSupabaseTransaction(
     createAuditEntry({
       action: "create",
       actor: audit.actor ?? "admin",
+      ...auditContext(audit, workspaceId),
       created_at: new Date().toISOString(),
+      details: {
+        result: "success",
+        summary: transactionSummary(normalized)
+      },
       entity_id: normalized.id,
       entity_type: "transaction",
       field_name: "",
@@ -635,7 +657,8 @@ export async function updateSupabaseTransaction(
   });
   const previewAuditLogs = buildTransactionAuditLogs(previous, preview, {
     ...audit,
-    createdAt: timestamp
+    createdAt: timestamp,
+    workspaceId
   });
 
   if (!previewAuditLogs.length) {
@@ -651,7 +674,8 @@ export async function updateSupabaseTransaction(
     }, workspaceId);
     const auditLogs = buildTransactionAuditLogs(previous, updated, {
       ...audit,
-      createdAt: timestamp
+      createdAt: timestamp,
+      workspaceId
     });
 
     await upsertReceiptRow(config, updated, workspaceId);
@@ -699,7 +723,12 @@ export async function deleteSupabaseTransaction(
     createAuditEntry({
       action: "delete",
       actor: audit.actor ?? "admin",
+      ...auditContext(audit, workspaceId),
       created_at: new Date().toISOString(),
+      details: {
+        result: "success",
+        summary: transactionSummary(previous)
+      },
       entity_id: previous.id,
       entity_type: "transaction",
       field_name: "",
@@ -738,7 +767,13 @@ export async function importSupabaseTransactions(
     createAuditEntry({
       action: "create",
       actor: audit.actor ?? "system",
+      ...auditContext(audit, workspaceId),
       created_at: timestamp,
+      details: {
+        result: "success",
+        source: audit.source ?? "csv_import",
+        summary: transactionSummary(transaction)
+      },
       entity_id: transaction.id,
       entity_type: "transaction",
       field_name: "",
@@ -813,16 +848,21 @@ export async function loadSupabaseBackup(workspaceId?: string): Promise<LocalBac
   };
 }
 
-export async function loadSupabaseAuditLogs(workspaceId?: string): Promise<AuditLog[]> {
+export async function loadSupabaseAuditLogs(
+  workspaceId?: string,
+  options: { limit?: number; offset?: number } = {}
+): Promise<AuditLog[]> {
   const config = getSupabaseConfig();
 
   if (!config) {
     throw new Error("Supabase is not configured.");
   }
 
+  const limit = Math.max(1, Math.min(500, Math.floor(options.limit ?? 100)));
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const auditLogRows = await supabaseRequest<AuditLogRow[]>(
     config,
-    `audit_logs?select=*${workspaceFilter(workspaceId)}&order=created_at.desc`
+    `audit_logs?select=*${workspaceFilter(workspaceId)}&order=created_at.desc&limit=${limit}&offset=${offset}`
   );
 
   return normalizeAuditLogs(auditLogRows);
@@ -849,7 +889,8 @@ export async function closeSupabaseMonthlyClosing(
   reason: string,
   readinessScore: number,
   summary: MonthlyClosingSummaryJson,
-  workspaceId?: string
+  workspaceId?: string,
+  audit: TransactionCreateAuditOptions = {}
 ) {
   const config = getSupabaseConfig();
 
@@ -884,9 +925,17 @@ export async function closeSupabaseMonthlyClosing(
     updated_at: now
   });
   const auditLog = createAuditEntry({
-    action: "update",
-    actor: "admin",
+    action: "month_closed",
+    actor: audit.actor ?? "admin",
+    ...auditContext(audit, workspaceId),
     created_at: now,
+    details: {
+      month,
+      readiness_score: readinessScore,
+      result: "success",
+      status: "closed",
+      year
+    },
     entity_id: id,
     entity_type: "reconciliation",
     field_name: "monthly_closing",
@@ -910,7 +959,8 @@ export async function reopenSupabaseMonthlyClosing(
   year: number,
   month: number,
   reason: string,
-  workspaceId?: string
+  workspaceId?: string,
+  audit: TransactionCreateAuditOptions = {}
 ) {
   const config = getSupabaseConfig();
 
@@ -943,9 +993,16 @@ export async function reopenSupabaseMonthlyClosing(
     updated_at: now
   });
   const auditLog = createAuditEntry({
-    action: "update",
-    actor: "admin",
+    action: "month_reopened",
+    actor: audit.actor ?? "admin",
+    ...auditContext(audit, workspaceId),
     created_at: now,
+    details: {
+      month,
+      result: "success",
+      status: "reopened",
+      year
+    },
     entity_id: id,
     entity_type: "reconciliation",
     field_name: "monthly_closing",

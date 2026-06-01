@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { appendServerAuditLog } from "@/lib/audit-server";
 import { setActiveWorkspaceCookie } from "@/lib/auth-cookies";
 import { getAuthenticatedContext } from "@/lib/server-auth";
 import { getActiveWorkspaceMembershipForUser } from "@/lib/supabase-auth-server";
@@ -38,6 +39,27 @@ export async function POST(request: NextRequest) {
 
   if (!access) {
     return forbidden();
+  }
+
+  try {
+    await appendServerAuditLog(auth, {
+      action: "workspace_switched",
+      actor: auth.user.email ?? auth.membership?.role ?? "unknown",
+      details: {
+        from_workspace_id: auth.workspace.id,
+        result: "success",
+        to_workspace_id: access.workspace.id
+      },
+      entity_id: access.workspace.id,
+      entity_type: "workspace",
+      field_name: "active_workspace",
+      new_value: access.workspace.id,
+      old_value: auth.workspace.id,
+      reason: `Switched workspace from ${auth.workspace.id} to ${access.workspace.id}.`,
+      source: "manual"
+    });
+  } catch {
+    // Workspace switching should not fail solely because audit persistence is temporarily unavailable.
   }
 
   const response = NextResponse.json({

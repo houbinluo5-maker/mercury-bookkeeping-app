@@ -352,6 +352,24 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
   const [exportActorContext, setExportActorContext] = useState<ExportActorContext>({});
   const [loaded, setLoaded] = useState(false);
   const permissions = useMemo(() => permissionsForRole(workspaceRole === "unknown" ? null : workspaceRole), [workspaceRole]);
+  const auditIdentity = useMemo(
+    () => ({
+      actorEmail: exportActorContext.actorEmail,
+      actorRole: workspaceRole,
+      actorUserId: exportActorContext.actorUserId,
+      workspaceId: exportActorContext.workspaceId
+    }),
+    [exportActorContext.actorEmail, exportActorContext.actorUserId, exportActorContext.workspaceId, workspaceRole]
+  );
+  const auditEntryIdentity = useMemo(
+    () => ({
+      actor_email: auditIdentity.actorEmail,
+      actor_role: auditIdentity.actorRole,
+      actor_user_id: auditIdentity.actorUserId,
+      workspace_id: auditIdentity.workspaceId
+    }),
+    [auditIdentity]
+  );
 
   const setPermissionDeniedStatus = useCallback((action: string) => {
     setStorageStatus((current) => ({
@@ -1196,9 +1214,17 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         updated_at: now
       };
       const auditEntry = createAuditEntry({
-        action: "update",
+        action: "month_closed",
         actor: "admin",
+        actor_role: workspaceRole,
         created_at: now,
+        details: {
+          month,
+          readiness_score: closing.readiness_score,
+          result: "success",
+          status: "closed",
+          year
+        },
         entity_id: closing.id,
         entity_type: "reconciliation",
         field_name: "monthly_closing",
@@ -1231,7 +1257,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       setPermissionDeniedStatus,
       storageStatus.configured,
       storageStatus.mode,
-      transactions
+      transactions,
+      workspaceRole
     ]
   );
 
@@ -1292,9 +1319,16 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         updated_at: now
       };
       const auditEntry = createAuditEntry({
-        action: "update",
+        action: "month_reopened",
         actor: "admin",
+        actor_role: workspaceRole,
         created_at: now,
+        details: {
+          month,
+          result: "success",
+          status: "reopened",
+          year
+        },
         entity_id: closing.id,
         entity_type: "reconciliation",
         field_name: "monthly_closing",
@@ -1322,7 +1356,8 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       setPermissionDeniedStatus,
       storageStatus.configured,
       storageStatus.mode,
-      transactions
+      transactions,
+      workspaceRole
     ]
   );
 
@@ -1401,7 +1436,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         createAuditEntry({
           action: "create",
           actor: audit.actor ?? "admin",
+          ...auditEntryIdentity,
           created_at: now,
+          details: {
+            result: "success",
+            summary: transactionSummary(transaction)
+          },
           entity_id: transaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1423,6 +1463,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       return transaction;
     },
     [
+      auditEntryIdentity,
       auditLogs,
       categoryState,
       maybeSyncToSupabase,
@@ -1468,7 +1509,13 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         createAuditEntry({
           action: "create",
           actor: audit.actor ?? "system",
+          ...auditEntryIdentity,
           created_at: now,
+          details: {
+            result: "success",
+            source: audit.source ?? "csv_import",
+            summary: transactionSummary(transaction)
+          },
           entity_id: transaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1490,6 +1537,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       return importedTransactions;
     },
     [
+      auditEntryIdentity,
       auditLogs,
       categoryState,
       maybeSyncToSupabase,
@@ -1540,6 +1588,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
 
       const newAuditEntries = buildTransactionAuditLogs(currentTransaction, nextTransaction, {
         ...audit,
+        ...auditIdentity,
         createdAt: timestamp
       });
 
@@ -1570,6 +1619,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       );
     },
     [
+      auditIdentity,
       auditLogs,
       categoryState,
       monthlyClosings,
@@ -1611,6 +1661,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
           newAuditEntries.push(
             ...buildTransactionAuditLogs(transaction, nextTransaction, {
               ...update.audit,
+              ...auditIdentity,
               createdAt: timestamp
             })
           );
@@ -1631,6 +1682,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       );
     },
     [
+      auditIdentity,
       auditLogs,
       categoryState,
       maybeSyncToSupabase,
@@ -1690,7 +1742,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
         createAuditEntry({
           action: "delete",
           actor: audit.actor ?? "admin",
+          ...auditEntryIdentity,
           created_at: timestamp,
+          details: {
+            result: "success",
+            summary: transactionSummary(currentTransaction)
+          },
           entity_id: currentTransaction.id,
           entity_type: "transaction",
           field_name: "",
@@ -1710,6 +1767,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       );
     },
     [
+      auditEntryIdentity,
       auditLogs,
       categoryState,
       monthlyClosings,
@@ -1732,7 +1790,10 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       }
 
       const normalized = normalizeSettings(nextSettings);
-      const newAuditEntries = buildSettingsAuditLogs(settings, normalized, audit);
+      const newAuditEntries = buildSettingsAuditLogs(settings, normalized, {
+        ...audit,
+        ...auditIdentity
+      });
       const nextAuditLogs = mergeAuditLogs(auditLogs, newAuditEntries);
 
       setSettings(normalized);
@@ -1746,6 +1807,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     },
     [
       auditLogs,
+      auditIdentity,
       categoryState,
       maybeSyncToSupabase,
       permissions.canManageSettings,
@@ -1766,7 +1828,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       createAuditEntry({
         action: "delete",
         actor: "admin",
+        ...auditEntryIdentity,
         created_at: timestamp,
+        details: {
+          result: "success",
+          summary: transactionSummary(transaction)
+        },
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",
@@ -1785,6 +1852,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       newAuditEntries
     );
   }, [
+    auditEntryIdentity,
     auditLogs,
     categoryState,
     maybeSyncToSupabase,
@@ -1805,7 +1873,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       createAuditEntry({
         action: "delete",
         actor: "admin",
+        ...auditEntryIdentity,
         created_at: timestamp,
+        details: {
+          result: "success",
+          summary: transactionSummary(transaction)
+        },
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",
@@ -1819,7 +1892,12 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       createAuditEntry({
         action: "create",
         actor: "system",
+        ...auditEntryIdentity,
         created_at: timestamp,
+        details: {
+          result: "success",
+          summary: transactionSummary(transaction)
+        },
         entity_id: transaction.id,
         entity_type: "transaction",
         field_name: "",
@@ -1831,6 +1909,7 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
     );
     const settingEntries = buildSettingsAuditLogs(settings, defaultSettings, {
       actor: "admin",
+      ...auditIdentity,
       createdAt: timestamp,
       reason: "Reset demo seed data.",
       source: "system"
@@ -1847,7 +1926,9 @@ export function BookkeepingProvider({ children }: { children: React.ReactNode })
       newAuditEntries
     );
   }, [
+    auditEntryIdentity,
     auditLogs,
+    auditIdentity,
     maybeSyncToSupabase,
     permissions.canManageSettings,
     setPermissionDeniedStatus,
