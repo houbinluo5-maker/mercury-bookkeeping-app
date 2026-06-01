@@ -123,14 +123,35 @@ export const sourceOptions = [
 ];
 
 export const defaultSettings: AppSettings = {
+  workspace_name: "Mercury Books Workspace",
   company_name: "Mercury Bookkeeping LLC",
+  company_legal_name: "Mercury Bookkeeping LLC",
+  dba_name: "Mercury Books",
+  business_type: "Ecommerce",
   entity_type: "US LLC",
+  ein_tax_id: "",
+  registered_state: "Delaware",
+  business_address: "",
+  contact_email: "",
+  finance_contact_name: "",
   tax_year: 2026,
   default_currency: "USD",
   default_account: "Mercury Checking",
   bookkeeping_method: "cash",
   business_type_tax_notes: "US LLC ecommerce business using cash-basis bookkeeping.",
-  language: "en"
+  country_region: "United States",
+  timezone_display: "Asia/Shanghai",
+  language: "en",
+  require_receipts_over_threshold: true,
+  receipt_required_threshold_amount: 75,
+  monthly_close_reminder_day: 5,
+  lock_closed_months: true,
+  allow_admins_reopen_months: false,
+  cpa_read_only_note: "CPA users can review reports, transactions, receipts, audit history, and export tax package data without changing workspace settings.",
+  default_category_fallback: "Uncategorized",
+  data_retention_policy: "7_years",
+  receipt_retention_policy: "7_years",
+  export_watermark_preference: "workspace_name"
 };
 
 export const seedTransactions: Transaction[] = [

@@ -12,6 +12,7 @@ import type {
   TransactionDraft,
   WorkspaceRole
 } from "@/lib/types";
+import { settingSectionForField } from "@/lib/settings-permissions";
 
 export const auditEntityTypes: AuditEntityType[] = [
   "transaction",
@@ -83,14 +84,35 @@ const trackedTransactionFields = [
 ] as const;
 
 const trackedSettingsFields = [
+  "workspace_name",
   "company_name",
+  "company_legal_name",
+  "dba_name",
+  "business_type",
   "entity_type",
+  "ein_tax_id",
+  "registered_state",
+  "business_address",
+  "contact_email",
+  "finance_contact_name",
   "tax_year",
   "default_currency",
   "default_account",
   "bookkeeping_method",
   "business_type_tax_notes",
-  "language"
+  "country_region",
+  "timezone_display",
+  "language",
+  "require_receipts_over_threshold",
+  "receipt_required_threshold_amount",
+  "monthly_close_reminder_day",
+  "lock_closed_months",
+  "allow_admins_reopen_months",
+  "cpa_read_only_note",
+  "default_category_fallback",
+  "data_retention_policy",
+  "receipt_retention_policy",
+  "export_watermark_preference"
 ] as const;
 
 type AuditOverrideOptions = {
@@ -423,8 +445,8 @@ export function buildSettingsAuditLogs(
   options: SettingsAuditOptions = {}
 ) {
   const entries = trackedSettingsFields.flatMap((fieldName) => {
-    const oldValue = asAuditValue(previous[fieldName]);
-    const newValue = asAuditValue(next[fieldName]);
+    const oldValue = settingsAuditValue(fieldName, asAuditValue(previous[fieldName]));
+    const newValue = settingsAuditValue(fieldName, asAuditValue(next[fieldName]));
 
     if (oldValue === newValue) return [];
 
@@ -438,10 +460,13 @@ export function buildSettingsAuditLogs(
         created_at: options.createdAt,
         details: {
           ...options.details,
+          actor_email: options.actorEmail ?? "",
+          actor_role: options.actorRole ?? "unknown",
           field_name: fieldName,
           new_value: newValue,
           old_value: oldValue,
-          result: "success"
+          result: "success",
+          section: settingSectionForField(fieldName)
         },
         entity_id: "default",
         entity_type: "settings",
@@ -512,6 +537,19 @@ export function displayAuditValue(value: string) {
   if (!value) return "-";
   if (value === "true") return "True";
   if (value === "false") return "False";
+
+  return value;
+}
+
+function maskTaxIdentifier(value: string) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return value ? "***" : "";
+
+  return `***${digits.slice(-4)}`;
+}
+
+function settingsAuditValue(fieldName: string, value: string) {
+  if (/ein|tax_id|taxid/i.test(fieldName)) return maskTaxIdentifier(value);
 
   return value;
 }

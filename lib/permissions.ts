@@ -21,6 +21,7 @@ export type WorkspacePermissions = {
   canExportWorkspaceArchive: boolean;
   canInviteMembers: boolean;
   canManageMembers: boolean;
+  canManageOperationalSettings: boolean;
   canManageSettings: boolean;
   canManageWorkspace: boolean;
   canReopenMonth: boolean;
@@ -80,6 +81,7 @@ export function permissionsForRole(
     canExportWorkspaceArchive: owner,
     canInviteMembers: owner || admin,
     canManageMembers: owner,
+    canManageOperationalSettings: owner || admin || bookkeeper,
     canManageSettings: owner,
     canManageWorkspace: owner,
     canReopenMonth: operational,
@@ -102,6 +104,10 @@ export function canManageMembers(subject: PermissionSubject) {
 
 export function canManageSettings(subject: PermissionSubject) {
   return permissionsForRole(subject).canManageSettings;
+}
+
+export function canManageOperationalSettings(subject: PermissionSubject) {
+  return permissionsForRole(subject).canManageOperationalSettings;
 }
 
 export function canEditTransactions(subject: PermissionSubject) {

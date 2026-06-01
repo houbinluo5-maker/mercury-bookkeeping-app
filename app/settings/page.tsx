@@ -1,44 +1,385 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Database, Download, FileJson, RotateCcw, Save, Trash2, Upload } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Archive,
+  BadgeCheck,
+  Building2,
+  CalendarClock,
+  ClipboardCheck,
+  Download,
+  FileJson,
+  Languages,
+  Lock,
+  Receipt,
+  Save,
+  ShieldCheck,
+  Users,
+  WalletCards
+} from "lucide-react";
 import { Badge } from "@/components/badge";
-import { Button } from "@/components/button";
+import { Button, buttonClassName } from "@/components/button";
 import { PageHeader } from "@/components/page-header";
-import { PermissionNotice } from "@/components/permission-notice";
 import { AlertBanner, SectionHeader } from "@/components/ui-primitives";
-import { accountOptions, defaultSettings } from "@/lib/seed-data";
 import { downloadExcel } from "@/lib/export-excel";
 import { useI18n } from "@/lib/i18n";
+import { canUpdateSettingsFields, changedSettingsFields, type SettingsField } from "@/lib/settings-permissions";
+import { accountOptions, categories } from "@/lib/seed-data";
 import { useBookkeeping } from "@/lib/storage";
-import type { AppSettings, LocalBackup } from "@/lib/types";
+import type { AppSettings, WorkspaceRole } from "@/lib/types";
+
+type AccountSnapshot = {
+  authProvider?: string;
+  normalizedEmail?: string;
+  ownsWorkspace?: boolean;
+  user?: { email?: string; id?: string; name?: string };
+  workspace?: { id?: string; name?: string };
+  workspaces?: Array<{ is_active?: boolean; name?: string; role?: WorkspaceRole; status?: string }>;
+};
+
+type SaveStatus = {
+  message: string;
+  tone: "green" | "red" | "blue";
+};
+
+const entityTypes = ["US LLC", "C-Corp", "S-Corp", "Sole Proprietor", "Other"];
+const countryRegions = ["United States", "China", "Hong Kong", "Singapore", "Other"];
+const currencies = ["USD", "CNY", "HKD", "SGD", "EUR", "GBP"];
+const retentionPolicies = ["7_years", "5_years", "indefinite"] as const;
+const watermarkPreferences = ["workspace_name", "confidential", "none"] as const;
+
+const copy = {
+  en: {
+    account: "Account",
+    address: "Business address",
+    adminLimited: "Admins can update operational preferences only.",
+    advancedExports: "Advanced exports",
+    allowAdminsReopen: "Allow admins to reopen months",
+    auditTrailEnabled: "Audit trail enabled",
+    billingComingSoon: "Plan and billing",
+    brandName: "DBA / brand name",
+    businessType: "Business type",
+    commercialDescription: "Commercial controls are visible as product groundwork only. Billing and plan enforcement are not active.",
+    commercialTitle: "SaaS controls",
+    companyDescription: "Company identity used for CPA handoff, exports, and internal finance records.",
+    companyInfo: "Company information",
+    companyLegalName: "Company legal name",
+    complianceDescription: "Data governance signals for finance review and future commercial packaging.",
+    complianceTitle: "Data and compliance",
+    contactEmail: "Contact email",
+    countryRegion: "Country / region",
+    cpaAccess: "Dedicated CPA access",
+    cpaReady: "CPA handoff readiness",
+    cpaReadonly: "CPA read-only note",
+    currentUser: "Current user role",
+    dataRetention: "Data retention policy",
+    defaultCategory: "Default category fallback",
+    defaultCurrency: "Default currency",
+    defaultTaxYear: "Default tax year",
+    disabled: "Coming soon",
+    enabled: "Enabled",
+    exportPermissions: "Export permissions enabled",
+    exportWatermark: "Export watermark preference",
+    financeContact: "Finance contact name",
+    financeDescription: "Operational defaults for receipt enforcement, monthly close hygiene, and review workflows.",
+    financeOperations: "Finance operations preferences",
+    legalEntity: "Entity type",
+    lockClosedMonths: "Lock closed months",
+    monthlyCloseDay: "Monthly close reminder day",
+    owner: "Workspace owner",
+    ownerOnly: "Owner only",
+    profileDescription: "Workspace-level defaults used across dashboards, reports, exports, and audit views.",
+    profileTitle: "Workspace profile",
+    readOnlyDetail: "Ask the workspace owner to change settings.",
+    readOnlyTitle: "You have read-only access to workspace settings.",
+    receiptPolicy: "Receipt retention policy",
+    receiptThreshold: "Receipt required threshold amount",
+    requireReceipts: "Require receipts above threshold",
+    rbacEnabled: "Role-based access enabled",
+    registeredState: "Registered state",
+    saved: "Settings saved.",
+    seatsComingSoon: "Seats",
+    securityDescription: "Access posture for workspace governance and review.",
+    securityNote: "Sessions use secure HTTP-only cookies. OAuth provider configuration is controlled by deployment environment.",
+    securityTitle: "Security and access",
+    settingsError: "Settings could not be saved.",
+    settingsTitle: "Workspace settings",
+    taxId: "EIN / Tax ID",
+    teamAccess: "Team access summary",
+    timezone: "Timezone display preference",
+    usageLimits: "Usage limits",
+    utcChinaTime: "UTC storage / China time display",
+    viewAccount: "Account",
+    viewAudit: "Audit Trail",
+    viewTeam: "Team Members",
+    workspaceName: "Workspace name"
+  },
+  zh: {
+    account: "账户",
+    address: "营业地址",
+    adminLimited: "管理员只能更新运营偏好设置。",
+    advancedExports: "高级导出",
+    allowAdminsReopen: "允许管理员重新打开月份",
+    auditTrailEnabled: "审计追踪已启用",
+    billingComingSoon: "计划和账单",
+    brandName: "DBA / 品牌名称",
+    businessType: "业务类型",
+    commercialDescription: "商业化控制仅作为产品基础展示。账单和套餐限制尚未启用。",
+    commercialTitle: "SaaS 控制",
+    companyDescription: "用于 CPA 交接、导出和内部财务记录的公司身份信息。",
+    companyInfo: "公司信息",
+    companyLegalName: "公司法定名称",
+    complianceDescription: "用于财务复核和未来商业化包装的数据治理信号。",
+    complianceTitle: "数据与合规",
+    contactEmail: "联系邮箱",
+    countryRegion: "国家 / 地区",
+    cpaAccess: "专属 CPA 访问",
+    cpaReady: "CPA 交接就绪",
+    cpaReadonly: "CPA 只读说明",
+    currentUser: "当前用户角色",
+    dataRetention: "数据保留政策",
+    defaultCategory: "默认分类兜底",
+    defaultCurrency: "默认币种",
+    defaultTaxYear: "默认税年",
+    disabled: "即将推出",
+    enabled: "已启用",
+    exportPermissions: "导出权限已启用",
+    exportWatermark: "导出水印偏好",
+    financeContact: "财务联系人",
+    financeDescription: "用于收据要求、月结治理和复核流程的运营默认值。",
+    financeOperations: "财务运营偏好",
+    legalEntity: "实体类型",
+    lockClosedMonths: "锁定已关闭月份",
+    monthlyCloseDay: "月结提醒日",
+    owner: "工作区所有者",
+    ownerOnly: "仅所有者",
+    profileDescription: "用于仪表盘、报表、导出和审计视图的工作区默认设置。",
+    profileTitle: "工作区资料",
+    readOnlyDetail: "请联系工作区所有者修改设置。",
+    readOnlyTitle: "你对工作区设置拥有只读访问权限。",
+    receiptPolicy: "收据保留政策",
+    receiptThreshold: "收据要求金额阈值",
+    requireReceipts: "超过阈值要求收据",
+    rbacEnabled: "基于角色的访问已启用",
+    registeredState: "注册州",
+    saved: "设置已保存。",
+    seatsComingSoon: "席位",
+    securityDescription: "工作区治理和复核的访问状态。",
+    securityNote: "会话使用安全 HTTP-only Cookie。OAuth 提供商配置由部署环境控制。",
+    securityTitle: "安全与访问",
+    settingsError: "设置无法保存。",
+    settingsTitle: "工作区设置",
+    taxId: "EIN / 税号",
+    teamAccess: "团队访问摘要",
+    timezone: "时区显示偏好",
+    usageLimits: "使用限制",
+    utcChinaTime: "UTC 存储 / 中国时间显示",
+    viewAccount: "账户",
+    viewAudit: "审计追踪",
+    viewTeam: "团队成员",
+    workspaceName: "工作区名称"
+  }
+};
+
+function retentionLabel(value: AppSettings["data_retention_policy"], language: "en" | "zh") {
+  if (value === "7_years") return language === "zh" ? "7 年" : "7 years";
+  if (value === "5_years") return language === "zh" ? "5 年" : "5 years";
+  return language === "zh" ? "无限期" : "Indefinite";
+}
+
+function watermarkLabel(value: AppSettings["export_watermark_preference"], language: "en" | "zh") {
+  if (value === "workspace_name") return language === "zh" ? "工作区名称" : "Workspace name";
+  if (value === "confidential") return language === "zh" ? "机密标记" : "Confidential";
+  return language === "zh" ? "无" : "None";
+}
+
+function roleLabel(role: WorkspaceRole | "unknown", language: "en" | "zh") {
+  if (role === "unknown") return language === "zh" ? "未知" : "Unknown";
+  const labels: Record<WorkspaceRole, { en: string; zh: string }> = {
+    admin: { en: "Admin", zh: "管理员" },
+    bookkeeper: { en: "Bookkeeper", zh: "记账员" },
+    cpa: { en: "CPA", zh: "CPA" },
+    owner: { en: "Owner", zh: "所有者" },
+    viewer: { en: "Viewer", zh: "查看者" }
+  };
+
+  return labels[role][language];
+}
+
+function fieldLabel({
+  children,
+  label
+}: {
+  children: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <label className="space-y-1">
+      <span className="form-label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const Field = fieldLabel;
+
+function TextInput({
+  disabled,
+  onChange,
+  value,
+  type = "text"
+}: {
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  value: string;
+  type?: string;
+}) {
+  return (
+    <input
+      className="form-input"
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      type={type}
+      value={value}
+    />
+  );
+}
+
+function NumberInput({
+  disabled,
+  max,
+  min,
+  onChange,
+  value
+}: {
+  disabled?: boolean;
+  max?: number;
+  min?: number;
+  onChange: (value: number) => void;
+  value: number;
+}) {
+  return (
+    <input
+      className="form-input"
+      disabled={disabled}
+      max={max}
+      min={min}
+      onChange={(event) => onChange(Number(event.target.value))}
+      type="number"
+      value={value}
+    />
+  );
+}
+
+function SelectInput<T extends string>({
+  disabled,
+  onChange,
+  options,
+  renderLabel,
+  value
+}: {
+  disabled?: boolean;
+  onChange: (value: T) => void;
+  options: readonly T[];
+  renderLabel?: (value: T) => string;
+  value: T;
+}) {
+  return (
+    <select
+      className="form-input"
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value as T)}
+      value={value}
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {renderLabel ? renderLabel(option) : option}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function ToggleRow({
+  checked,
+  disabled,
+  label,
+  onChange
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-line bg-slate-50 px-3 py-2 text-sm text-ink">
+      <span className="font-medium">{label}</span>
+      <input
+        checked={checked}
+        className="h-4 w-4 accent-marine"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        type="checkbox"
+      />
+    </label>
+  );
+}
+
+function StatusRow({
+  icon,
+  label,
+  value,
+  tone = "green"
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "neutral" | "green" | "amber" | "red" | "blue";
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line py-3 last:border-b-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-slate-100 text-marine">
+          {icon}
+        </div>
+        <span className="text-sm font-medium text-ink">{label}</span>
+      </div>
+      <Badge tone={tone}>{value}</Badge>
+    </div>
+  );
+}
+
+function ComingSoonRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-3">
+      <div className="flex items-center gap-3">
+        <div className="text-slate-500">{icon}</div>
+        <span className="text-sm font-semibold text-slate-700">{label}</span>
+      </div>
+      <Badge tone="neutral">{value}</Badge>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const {
     settings,
     updateSettings,
-    clearTransactions,
-    resetDemoData,
-    transactions,
     exportBackup,
-    importBackup,
+    recordExportAudit,
+    transactions,
     storageStatus,
     permissions,
-    recordExportAudit,
-    syncToSupabase,
-    loadFromSupabase,
-    migrateLocalDataToSupabase,
+    workspaceRole,
     checkStorageHealth
   } = useBookkeeping();
+  const { language, t } = useI18n();
+  const c = copy[language];
   const [draft, setDraft] = useState<AppSettings>(settings);
-  const [saved, setSaved] = useState(false);
-  const [clearModalOpen, setClearModalOpen] = useState(false);
-  const [importStatus, setImportStatus] = useState("");
-  const [storageActionStatus, setStorageActionStatus] = useState("");
-  const [storageBusy, setStorageBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const healthCheckedRef = useRef(false);
-  const { t } = useI18n();
+  const [status, setStatus] = useState<SaveStatus | null>(null);
+  const [account, setAccount] = useState<AccountSnapshot | null>(null);
+  const [healthBusy, setHealthBusy] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDraft(settings), 0);
@@ -47,37 +388,39 @@ export default function SettingsPage() {
   }, [settings]);
 
   useEffect(() => {
-    if (healthCheckedRef.current) return;
-    healthCheckedRef.current = true;
-    void checkStorageHealth();
-  }, [checkStorageHealth]);
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => setAccount(data as AccountSnapshot | null))
+      .catch(() => undefined);
+  }, []);
+
+  const teamSummary = useMemo(() => {
+    const active = account?.workspaces?.find((workspace) => workspace.is_active);
+    if (!active) return language === "zh" ? "当前工作区访问已启用" : "Current workspace access enabled";
+
+    return `${active.name ?? draft.workspace_name} / ${roleLabel(active.role ?? workspaceRole, language)}`;
+  }, [account?.workspaces, draft.workspace_name, language, workspaceRole]);
+
+  const canEditOwner = permissions.canManageSettings;
+  const canEditOperational = permissions.canManageOperationalSettings;
+  const readOnly = !canEditOwner && !canEditOperational;
 
   function setField<K extends keyof AppSettings>(key: K, value: AppSettings[K]) {
     setDraft((current) => ({ ...current, [key]: value }));
-    setSaved(false);
+    setStatus(null);
   }
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!permissions.canManageSettings) return;
-    updateSettings(draft);
-    setSaved(true);
-  }
+  function save(fields: SettingsField[], successMessage = c.saved) {
+    const changedFields = changedSettingsFields(settings, draft);
+    const fieldsToCheck = changedFields.length ? changedFields : fields;
 
-  function confirmClearTransactions() {
-    if (!permissions.canDeleteTransactions) return;
-    clearTransactions();
-    setClearModalOpen(false);
-    setImportStatus(t("clearedTransactions"));
-  }
-
-  function reset() {
-    if (!permissions.canManageSettings) return;
-    if (window.confirm(t("resetDemoDataQuestion"))) {
-      resetDemoData();
-      setDraft(defaultSettings);
-      setImportStatus(t("restoredDemoData"));
+    if (!canUpdateSettingsFields(workspaceRole, fieldsToCheck)) {
+      setStatus({ message: c.settingsError, tone: "red" });
+      return;
     }
+
+    updateSettings(draft);
+    setStatus({ message: successMessage, tone: "green" });
   }
 
   async function downloadBackupJson() {
@@ -120,436 +463,284 @@ export default function SettingsPage() {
     downloadExcel(transactions, fileName);
   }
 
-  function storageStatusLabel() {
-    if (storageStatus.mode === "checking") return t("checkingStorage");
-    if (isSupabaseConnected()) return t("supabaseConnected");
-    if (storageStatus.mode === "error") return t("supabaseError");
-    return t("localStorageMode");
+  async function runHealthCheck() {
+    setHealthBusy(true);
+    await checkStorageHealth();
+    setHealthBusy(false);
   }
-
-  function storageStatusTone(): "neutral" | "green" | "amber" | "red" | "blue" {
-    if (isSupabaseConnected()) return "green";
-    if (storageStatus.mode === "error") return "red";
-    if (storageStatus.mode === "checking") return "blue";
-    return "amber";
-  }
-
-  function isSupabaseConnected() {
-    return storageStatus.supabaseConnected || storageStatus.mode === "supabase";
-  }
-
-  function healthBadgeTone(value: string | undefined): "neutral" | "green" | "amber" | "red" | "blue" {
-    if (value === "ok") return "green";
-    if (value === "missing") return "amber";
-    if (value === "error") return "red";
-    return "neutral";
-  }
-
-  function formatLastChecked() {
-    if (!storageStatus.lastCheckedAt) return "-";
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short"
-    }).format(new Date(storageStatus.lastCheckedAt));
-  }
-
-  async function runStorageAction(action: () => Promise<boolean>, successKey: string) {
-    setStorageBusy(true);
-    setStorageActionStatus("");
-
-    const ok = await action();
-
-    setStorageActionStatus(ok ? t(successKey) : t("supabaseNotConfiguredWarning"));
-    setStorageBusy(false);
-  }
-
-  async function restoreBackup(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!permissions.canManageSettings) {
-      event.target.value = "";
-      return;
-    }
-
-    try {
-      const backup = JSON.parse(await file.text()) as LocalBackup;
-      if (!Array.isArray(backup.transactions) || !backup.settings) {
-        throw new Error(t("backupMissingFields"));
-      }
-      importBackup(backup);
-      setImportStatus(`${t("restoredBackupPrefix")} ${file.name}.`);
-    } catch (error) {
-      setImportStatus(
-        error instanceof Error && error.message === t("backupMissingFields")
-          ? error.message
-          : t("couldNotRestoreBackup")
-      );
-    } finally {
-      event.target.value = "";
-    }
-  }
-
-  const supabaseConnected = isSupabaseConnected();
-  const backupWriteDisabledNotice = storageStatus.notice || t("fullBackupSyncDisabledNotice");
-  const storageErrorMessage = storageStatus.error || (storageStatus.mode === "error" ? storageStatus.message : "");
-  const storageModeText =
-    storageStatus.mode === "local" && supabaseConnected
-      ? t("localDraftMode")
-      : supabaseConnected
-        ? t("supabaseConnected")
-        : t("localStorageMode");
-  const healthRows = storageStatus.health
-    ? [
-        [t("supabaseUrl"), storageStatus.health.supabase_url],
-        [t("serviceRoleKey"), storageStatus.health.service_role_key],
-        [t("transactionsTable"), storageStatus.health.transactions],
-        [t("auditLogsTable"), storageStatus.health.audit_logs],
-        [t("monthlyClosingsTable"), storageStatus.health.monthly_closings]
-      ]
-    : [];
 
   return (
     <div className="space-y-6">
       <PageHeader
         actions={
-          <>
-            {permissions.canExportFullBackup ? (
-              <>
-                <Button onClick={() => void downloadBackupJson()}>
-                  <FileJson aria-hidden="true" className="h-4 w-4" />
-                  {t("backupJson")}
-                </Button>
-                <Button onClick={() => void downloadFullLedgerExcel()}>
-                  <Download aria-hidden="true" className="h-4 w-4" />
-                  {t("exportExcel")}
-                </Button>
-              </>
-            ) : null}
-          </>
+          permissions.canExportFullBackup ? (
+            <>
+              <Button onClick={() => void downloadBackupJson()}>
+                <FileJson aria-hidden="true" className="h-4 w-4" />
+                {t("backupJson")}
+              </Button>
+              <Button onClick={() => void downloadFullLedgerExcel()}>
+                <Download aria-hidden="true" className="h-4 w-4" />
+                {t("exportExcel")}
+              </Button>
+            </>
+          ) : null
         }
-        eyebrow={t("localMvp")}
-        description={t("settingsPageDescription")}
-        title={t("settings")}
+        eyebrow={roleLabel(workspaceRole, language)}
+        description={language === "zh" ? "为财务团队、所有者和 CPA 管理工作区控制项。" : "Workspace controls for finance operators, owners, and CPA review."}
+        title={c.settingsTitle}
       />
 
-      {!permissions.canExportFullBackup ? (
-        <PermissionNotice detailKey="askOwnerForExportAccess" titleKey="exportRestrictedForRole" />
+      {readOnly ? (
+        <AlertBanner tone="info">
+          <p className="font-semibold">{c.readOnlyTitle}</p>
+          <p>{c.readOnlyDetail}</p>
+        </AlertBanner>
       ) : null}
+      {!canEditOwner && canEditOperational ? (
+        <AlertBanner tone="info">
+          <p>{c.adminLimited}</p>
+        </AlertBanner>
+      ) : null}
+      {status ? <Badge tone={status.tone}>{status.message}</Badge> : null}
 
-      <form className="space-y-6" onSubmit={submit}>
-        <section className="surface-card space-y-4 p-5">
-          <SectionHeader description={t("companySettingsHelp")} title={t("companyProfile")} />
-
-          {!permissions.canManageSettings ? <PermissionNotice detailKey="permissionRequiredOwner" /> : null}
-
-          <fieldset className="space-y-4" disabled={!permissions.canManageSettings}>
-            <section className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-1">
-                <span className="form-label">{t("language")}</span>
-                <select
-                  className="form-input"
-                  onChange={(event) => setField("language", event.target.value as AppSettings["language"])}
-                  value={draft.language}
-                >
-                  <option value="en">{t("english")}</option>
-                  <option value="zh">{t("simplifiedChinese")}</option>
-                </select>
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("companyName")}</span>
-                <input
-                  className="form-input"
-                  onChange={(event) => setField("company_name", event.target.value)}
-                  value={draft.company_name}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("businessType")}</span>
-                <input
-                  className="form-input"
-                  onChange={(event) => setField("entity_type", event.target.value)}
-                  value={draft.entity_type}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("taxYear")}</span>
-                <input
-                  className="form-input"
-                  min="2020"
-                  onChange={(event) => setField("tax_year", Number(event.target.value))}
-                  type="number"
-                  value={draft.tax_year}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("defaultCurrency")}</span>
-                <input
-                  className="form-input"
-                  onChange={(event) => setField("default_currency", event.target.value.toUpperCase())}
-                  value={draft.default_currency}
-                />
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("defaultAccountName")}</span>
-                <input
-                  className="form-input"
-                  list="settings-account-options"
-                  onChange={(event) => setField("default_account", event.target.value)}
-                  value={draft.default_account}
-                />
-                <datalist id="settings-account-options">
-                  {accountOptions.map((account) => (
-                    <option key={account} value={account} />
-                  ))}
-                </datalist>
-              </label>
-              <label className="space-y-1">
-                <span className="form-label">{t("bookkeepingMethod")}</span>
-                <select
-                  className="form-input"
-                  onChange={(event) =>
-                    setField("bookkeeping_method", event.target.value as AppSettings["bookkeeping_method"])
-                  }
-                  value={draft.bookkeeping_method}
-                >
-                  <option value="cash">{t("cash")}</option>
-                  <option value="accrual">{t("accrual")}</option>
-                </select>
-              </label>
-              <label className="space-y-1 md:col-span-2">
-                <span className="form-label">{t("businessTypeTaxNotes")}</span>
-                <textarea
-                  className="form-textarea"
-                  onChange={(event) => setField("business_type_tax_notes", event.target.value)}
-                  value={draft.business_type_tax_notes}
-                />
-              </label>
-            </section>
-
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" variant="primary">
+      <section className="surface-card space-y-5 p-5">
+        <SectionHeader
+          actions={
+            canEditOwner ? (
+              <Button onClick={() => save(["workspace_name", "company_name", "business_type", "tax_year", "default_currency", "country_region", "timezone_display", "language"])} variant="primary">
                 <Save aria-hidden="true" className="h-4 w-4" />
                 {t("saveSettings")}
               </Button>
-              {saved ? <Badge tone="green">{t("saved")}</Badge> : null}
-            </div>
-          </fieldset>
-        </section>
-      </form>
+            ) : null
+          }
+          description={c.profileDescription}
+          title={c.profileTitle}
+        />
+        <fieldset className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" disabled={!canEditOwner}>
+          <Field label={c.workspaceName}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("workspace_name", value)} value={draft.workspace_name} />
+          </Field>
+          <Field label={c.companyLegalName}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("company_name", value)} value={draft.company_name} />
+          </Field>
+          <Field label={c.businessType}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("business_type", value)} value={draft.business_type} />
+          </Field>
+          <Field label={c.defaultTaxYear}>
+            <NumberInput disabled={!canEditOwner} max={2100} min={2020} onChange={(value) => setField("tax_year", value)} value={draft.tax_year} />
+          </Field>
+          <Field label={c.defaultCurrency}>
+            <SelectInput disabled={!canEditOwner} onChange={(value) => setField("default_currency", value)} options={currencies} value={draft.default_currency} />
+          </Field>
+          <Field label={c.countryRegion}>
+            <SelectInput disabled={!canEditOwner} onChange={(value) => setField("country_region", value)} options={countryRegions} value={draft.country_region} />
+          </Field>
+          <Field label={c.timezone}>
+            <SelectInput
+              disabled={!canEditOwner}
+              onChange={(value) => setField("timezone_display", value)}
+              options={["Asia/Shanghai", "UTC"] as const}
+              renderLabel={(value) => (value === "Asia/Shanghai" ? "Asia/Shanghai / UTC+8" : "UTC")}
+              value={draft.timezone_display}
+            />
+          </Field>
+          <Field label={t("language")}>
+            <SelectInput
+              disabled={!canEditOwner}
+              onChange={(value) => setField("language", value)}
+              options={["en", "zh"] as const}
+              renderLabel={(value) => (value === "zh" ? t("simplifiedChinese") : t("english"))}
+              value={draft.language}
+            />
+          </Field>
+        </fieldset>
+      </section>
 
-      <section className="premium-panel space-y-4 p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <section className="surface-card space-y-5 p-5">
+        <SectionHeader
+          actions={
+            canEditOwner ? (
+              <Button onClick={() => save(["company_legal_name", "dba_name", "entity_type", "ein_tax_id", "registered_state", "business_address", "contact_email", "finance_contact_name"])} variant="primary">
+                <Save aria-hidden="true" className="h-4 w-4" />
+                {t("saveSettings")}
+              </Button>
+            ) : null
+          }
+          description={c.companyDescription}
+          title={c.companyInfo}
+        />
+        <fieldset className="grid gap-4 md:grid-cols-2" disabled={!canEditOwner}>
+          <Field label={c.companyLegalName}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("company_legal_name", value)} value={draft.company_legal_name} />
+          </Field>
+          <Field label={c.brandName}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("dba_name", value)} value={draft.dba_name} />
+          </Field>
+          <Field label={c.legalEntity}>
+            <SelectInput disabled={!canEditOwner} onChange={(value) => setField("entity_type", value)} options={entityTypes} value={draft.entity_type} />
+          </Field>
+          <Field label={c.taxId}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("ein_tax_id", value)} value={draft.ein_tax_id} />
+          </Field>
+          <Field label={c.registeredState}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("registered_state", value)} value={draft.registered_state} />
+          </Field>
+          <Field label={c.contactEmail}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("contact_email", value)} type="email" value={draft.contact_email} />
+          </Field>
+          <Field label={c.financeContact}>
+            <TextInput disabled={!canEditOwner} onChange={(value) => setField("finance_contact_name", value)} value={draft.finance_contact_name} />
+          </Field>
+          <label className="space-y-1 md:col-span-2">
+            <span className="form-label">{c.address}</span>
+            <textarea
+              className="form-textarea"
+              disabled={!canEditOwner}
+              onChange={(event) => setField("business_address", event.target.value)}
+              value={draft.business_address}
+            />
+          </label>
+        </fieldset>
+      </section>
+
+      <section className="surface-card space-y-5 p-5">
+        <SectionHeader
+          actions={
+            canEditOperational ? (
+              <Button onClick={() => save(["require_receipts_over_threshold", "receipt_required_threshold_amount", "monthly_close_reminder_day", "default_category_fallback"])} variant="primary">
+                <Save aria-hidden="true" className="h-4 w-4" />
+                {t("saveSettings")}
+              </Button>
+            ) : null
+          }
+          description={c.financeDescription}
+          title={c.financeOperations}
+        />
+        <fieldset className="grid gap-4 md:grid-cols-2" disabled={!canEditOperational}>
+          <ToggleRow checked={draft.require_receipts_over_threshold} disabled={!canEditOperational} label={c.requireReceipts} onChange={(value) => setField("require_receipts_over_threshold", value)} />
+          <Field label={c.receiptThreshold}>
+            <NumberInput disabled={!canEditOperational} min={0} onChange={(value) => setField("receipt_required_threshold_amount", value)} value={draft.receipt_required_threshold_amount} />
+          </Field>
+          <Field label={c.monthlyCloseDay}>
+            <NumberInput disabled={!canEditOperational} max={28} min={1} onChange={(value) => setField("monthly_close_reminder_day", value)} value={draft.monthly_close_reminder_day} />
+          </Field>
+          <Field label={c.defaultCategory}>
+            <SelectInput
+              disabled={!canEditOperational}
+              onChange={(value) => setField("default_category_fallback", value)}
+              options={categories.map((category) => category.name)}
+              value={draft.default_category_fallback}
+            />
+          </Field>
+          <ToggleRow checked={draft.lock_closed_months} disabled={!canEditOwner} label={c.lockClosedMonths} onChange={(value) => setField("lock_closed_months", value)} />
+          <ToggleRow checked={draft.allow_admins_reopen_months} disabled={!canEditOwner} label={c.allowAdminsReopen} onChange={(value) => setField("allow_admins_reopen_months", value)} />
+          <Field label={t("defaultAccountName")}>
+            <SelectInput disabled={!canEditOwner} onChange={(value) => setField("default_account", value)} options={accountOptions} value={draft.default_account} />
+          </Field>
+          <Field label={t("bookkeepingMethod")}>
+            <SelectInput
+              disabled={!canEditOwner}
+              onChange={(value) => setField("bookkeeping_method", value)}
+              options={["cash", "accrual"] as const}
+              renderLabel={(value) => (value === "cash" ? t("cash") : t("accrual"))}
+              value={draft.bookkeeping_method}
+            />
+          </Field>
+          <label className="space-y-1 md:col-span-2">
+            <span className="form-label">{c.cpaReadonly}</span>
+            <textarea
+              className="form-textarea"
+              disabled={!canEditOwner}
+              onChange={(event) => setField("cpa_read_only_note", event.target.value)}
+              value={draft.cpa_read_only_note}
+            />
+          </label>
+        </fieldset>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-2">
+        <section className="surface-card space-y-4 p-5">
+          <SectionHeader description={c.securityDescription} title={c.securityTitle} />
           <div>
-            <h2 className="text-lg font-semibold tracking-normal text-ink">{t("supabasePersistence")}</h2>
-            <p className="mt-1 text-sm text-slate-600">{t("supabasePersistenceHelp")}</p>
+            <StatusRow icon={<ShieldCheck aria-hidden="true" className="h-4 w-4" />} label={c.owner} tone={account?.ownsWorkspace ? "green" : "neutral"} value={account?.ownsWorkspace ? (account.normalizedEmail || account.user?.email || roleLabel("owner", language)) : c.ownerOnly} />
+            <StatusRow icon={<Users aria-hidden="true" className="h-4 w-4" />} label={c.currentUser} value={roleLabel(workspaceRole, language)} />
+            <StatusRow icon={<BadgeCheck aria-hidden="true" className="h-4 w-4" />} label={c.teamAccess} value={teamSummary} />
+            <StatusRow icon={<Lock aria-hidden="true" className="h-4 w-4" />} label="OAuth" tone="blue" value={account?.authProvider || "deployment"} />
           </div>
-          <Badge tone={storageStatusTone()}>{storageStatusLabel()}</Badge>
-        </div>
-
-        {(storageStatus.mode === "local" && !supabaseConnected) || storageStatus.mode === "error" ? (
-          <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-4 w-4 text-amber-700" />} tone="warning">
-            <p>
-              {storageStatus.mode === "error"
-                ? storageStatus.message
-                : t("localStorageFallbackWarning")}
-            </p>
-          </AlertBanner>
-        ) : null}
-
-        {supabaseConnected ? (
-          <AlertBanner icon={<Database aria-hidden="true" className="h-4 w-4 text-blue-700" />} tone="info">
-            <p>{backupWriteDisabledNotice}</p>
-          </AlertBanner>
-        ) : null}
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("storageStatus")}</p>
-            <div className="mt-3">
-              <Badge tone={storageStatusTone()}>{storageStatusLabel()}</Badge>
-            </div>
-          </div>
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("transactions")}</p>
-            <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
-          </div>
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("dataSource")}</p>
-            <div className="mt-3">
-              <Badge tone={supabaseConnected ? "green" : "amber"}>
-                {storageModeText}
-              </Badge>
-            </div>
+          <p className="text-sm leading-6 text-slate-600">{c.securityNote}</p>
+          <div className="flex flex-wrap gap-2">
+            <Link className={buttonClassName()} href="/team">
+              <Users aria-hidden="true" className="h-4 w-4" />
+              {c.viewTeam}
+            </Link>
+            <Link className={buttonClassName()} href="/audit">
+              <ClipboardCheck aria-hidden="true" className="h-4 w-4" />
+              {c.viewAudit}
+            </Link>
+            <Link className={buttonClassName()} href="/account">
+              <ShieldCheck aria-hidden="true" className="h-4 w-4" />
+              {c.viewAccount}
+            </Link>
           </div>
         </section>
 
-        <section className="rounded-lg border border-line bg-slate-50 p-4">
-          <dl className="grid gap-3 text-sm md:grid-cols-4">
-            <div>
-              <dt className="form-label">{t("apiStatus")}</dt>
-              <dd className="mt-1 font-medium text-ink">
-                {typeof storageStatus.apiStatus === "number"
-                  ? `${storageStatus.apiStatus} ${storageStatus.apiStatusText || ""}`.trim()
-                  : "-"}
-              </dd>
-            </div>
-            <div>
-              <dt className="form-label">{t("storageMode")}</dt>
-              <dd className="mt-1 font-medium text-ink">{storageModeText}</dd>
-            </div>
-            <div>
-              <dt className="form-label">{t("lastChecked")}</dt>
-              <dd className="mt-1 font-medium text-ink">{formatLastChecked()}</dd>
-            </div>
-            <div>
-              <dt className="form-label">{t("errorMessage")}</dt>
-              <dd className="mt-1 font-medium text-ink">{storageErrorMessage || "-"}</dd>
-            </div>
-          </dl>
-          {healthRows.length ? (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              {healthRows.map(([label, value]) => (
-                <div key={label} className="rounded-md border border-line bg-white px-3 py-2">
-                  <p className="form-label">{label}</p>
-                  <div className="mt-2">
-                    <Badge tone={healthBadgeTone(value)}>{value ? t(`health.${value}`) : "-"}</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
+        <section className="surface-card space-y-4 p-5">
+          <SectionHeader
+            actions={<Button disabled={healthBusy} onClick={() => void runHealthCheck()}>{t("checkSupabaseHealth")}</Button>}
+            description={c.complianceDescription}
+            title={c.complianceTitle}
+          />
+          <div>
+            <StatusRow icon={<ClipboardCheck aria-hidden="true" className="h-4 w-4" />} label={c.auditTrailEnabled} value={c.enabled} />
+            <StatusRow icon={<Download aria-hidden="true" className="h-4 w-4" />} label={c.exportPermissions} value={c.enabled} />
+            <StatusRow icon={<ShieldCheck aria-hidden="true" className="h-4 w-4" />} label={c.rbacEnabled} value={c.enabled} />
+            <StatusRow icon={<Languages aria-hidden="true" className="h-4 w-4" />} label={c.utcChinaTime} tone="blue" value={draft.timezone_display === "Asia/Shanghai" ? "UTC+8" : "UTC"} />
+            <StatusRow icon={<Archive aria-hidden="true" className="h-4 w-4" />} label={c.cpaReady} tone="blue" value={storageStatus.mode === "error" ? t("supabaseError") : c.enabled} />
+          </div>
+          <fieldset className="grid gap-4 md:grid-cols-3" disabled={!canEditOwner}>
+            <Field label={c.dataRetention}>
+              <SelectInput disabled={!canEditOwner} onChange={(value) => setField("data_retention_policy", value)} options={retentionPolicies} renderLabel={(value) => retentionLabel(value, language)} value={draft.data_retention_policy} />
+            </Field>
+            <Field label={c.receiptPolicy}>
+              <SelectInput disabled={!canEditOwner} onChange={(value) => setField("receipt_retention_policy", value)} options={retentionPolicies} renderLabel={(value) => retentionLabel(value, language)} value={draft.receipt_retention_policy} />
+            </Field>
+            <Field label={c.exportWatermark}>
+              <SelectInput disabled={!canEditOwner} onChange={(value) => setField("export_watermark_preference", value)} options={watermarkPreferences} renderLabel={(value) => watermarkLabel(value, language)} value={draft.export_watermark_preference} />
+            </Field>
+          </fieldset>
+          {canEditOwner ? (
+            <Button onClick={() => save(["data_retention_policy", "receipt_retention_policy", "export_watermark_preference"])} variant="primary">
+              <Save aria-hidden="true" className="h-4 w-4" />
+              {t("saveSettings")}
+            </Button>
           ) : null}
         </section>
-
-        <div className="flex flex-wrap gap-2">
-          {!supabaseConnected && permissions.canManageWorkspace ? (
-            <Button
-              disabled={storageBusy}
-              onClick={() => runStorageAction(syncToSupabase, "syncedToSupabase")}
-            >
-              <Database aria-hidden="true" className="h-4 w-4" />
-              {t("syncToSupabase")}
-            </Button>
-          ) : null}
-          <Button
-            disabled={storageBusy}
-            onClick={() => runStorageAction(loadFromSupabase, "loadedFromSupabase")}
-          >
-            <Download aria-hidden="true" className="h-4 w-4" />
-            {t("loadFromSupabase")}
-          </Button>
-          {!supabaseConnected && permissions.canManageWorkspace ? (
-            <Button
-              disabled={storageBusy}
-              onClick={() => runStorageAction(migrateLocalDataToSupabase, "migratedToSupabase")}
-            >
-              <Upload aria-hidden="true" className="h-4 w-4" />
-              {t("migrateLocalDataToSupabase")}
-            </Button>
-          ) : null}
-          <Button
-            disabled={storageBusy}
-            onClick={() => runStorageAction(checkStorageHealth, "checkedStorageHealth")}
-          >
-            <Database aria-hidden="true" className="h-4 w-4" />
-            {t("checkSupabaseHealth")}
-          </Button>
-          {permissions.canExportFullBackup ? (
-            <Button onClick={() => void downloadBackupJson()}>
-              <FileJson aria-hidden="true" className="h-4 w-4" />
-              {t("exportLocalBackupJson")}
-            </Button>
-          ) : null}
-          <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
-            <Upload aria-hidden="true" className="h-4 w-4" />
-            {t("importLocalBackupJson")}
-          </Button>
-          {storageActionStatus ? <Badge tone="blue">{storageActionStatus}</Badge> : null}
-        </div>
-        {supabaseConnected ? (
-          <p className="text-sm text-slate-600">{t("importLocalDraftModeNotice")}</p>
-        ) : null}
       </section>
 
       <section className="surface-card space-y-4 p-5">
-        <div>
-          <SectionHeader description={t("backupDataToolsHelp")} title={t("backupDataTools")} />
-          <AlertBanner icon={<AlertTriangle aria-hidden="true" className="h-4 w-4 text-amber-700" />} tone="warning">
-            <p>{t("dataManagementWarning")}</p>
-          </AlertBanner>
-        </div>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("dataSource")}</p>
-            <div className="mt-3">
-              <Badge tone={supabaseConnected ? "green" : "amber"}>
-                {supabaseConnected ? storageModeText : t("seedDataLocalStorage")}
-              </Badge>
-            </div>
-          </div>
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("transactions")}</p>
-            <p className="mt-2 text-2xl font-semibold text-ink">{transactions.length}</p>
-          </div>
-          <div className="surface-card p-4 shadow-none">
-            <p className="form-label">{t("integrations")}</p>
-            <div className="mt-3">
-              <Badge tone="neutral">{t("notConnected")}</Badge>
-            </div>
-          </div>
-        </section>
-
-        <div className="flex flex-wrap gap-2">
-          {permissions.canExportFullBackup ? (
-            <Button onClick={() => void downloadBackupJson()}>
-              <FileJson aria-hidden="true" className="h-4 w-4" />
-              {t("exportLocalBackupJson")}
-            </Button>
-          ) : null}
-          <Button disabled={!permissions.canManageSettings} onClick={() => fileInputRef.current?.click()}>
-            <Upload aria-hidden="true" className="h-4 w-4" />
-            {t("importLocalBackupJson")}
-          </Button>
-          <input
-            accept="application/json,.json"
-            className="hidden"
-            onChange={restoreBackup}
-            ref={fileInputRef}
-            type="file"
-          />
-          <Button disabled={!permissions.canDeleteTransactions} onClick={() => setClearModalOpen(true)} variant="danger">
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
-            {t("clearTransactions")}
-          </Button>
-          <Button disabled={!permissions.canManageSettings} onClick={reset}>
-            <RotateCcw aria-hidden="true" className="h-4 w-4" />
-            {t("resetDemoSeedData")}
-          </Button>
-          {importStatus ? <Badge tone="blue">{importStatus}</Badge> : null}
+        <SectionHeader description={c.commercialDescription} title={c.commercialTitle} />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <ComingSoonRow icon={<WalletCards aria-hidden="true" className="h-4 w-4" />} label={c.billingComingSoon} value={c.disabled} />
+          <ComingSoonRow icon={<CalendarClock aria-hidden="true" className="h-4 w-4" />} label={c.usageLimits} value={c.disabled} />
+          <ComingSoonRow icon={<Users aria-hidden="true" className="h-4 w-4" />} label={c.seatsComingSoon} value={c.disabled} />
+          <ComingSoonRow icon={<Download aria-hidden="true" className="h-4 w-4" />} label={c.advancedExports} value={c.disabled} />
+          <ComingSoonRow icon={<Receipt aria-hidden="true" className="h-4 w-4" />} label={c.cpaAccess} value={c.disabled} />
         </div>
       </section>
 
-      {clearModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 px-4">
-          <div className="w-full max-w-md rounded-lg border border-line bg-white p-5 shadow-soft">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700">
-                <Database aria-hidden="true" className="h-5 w-5" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-ink">{t("clearAllTransactionsQuestion")}</h2>
-                <p className="mt-2 text-sm text-slate-600">{t("clearTransactionsBody")}</p>
-              </div>
-            </div>
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <Button onClick={() => setClearModalOpen(false)}>{t("cancel")}</Button>
-              <Button disabled={!permissions.canDeleteTransactions} onClick={confirmClearTransactions} variant="danger">
-                {t("clearTransactions")}
-              </Button>
-            </div>
-          </div>
+      <section className="surface-card space-y-4 p-5">
+        <SectionHeader description={language === "zh" ? "只显示非破坏性的存储状态和导出入口。" : "Non-destructive storage status and owner export controls."} title={language === "zh" ? "存储状态" : "Storage status"} />
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatusRow icon={<DatabaseIcon />} label={t("storageStatus")} tone={storageStatus.mode === "error" ? "red" : storageStatus.supabaseConnected ? "green" : "amber"} value={storageStatus.supabaseConnected ? t("supabaseConnected") : storageStatus.mode === "error" ? t("supabaseError") : t("localStorageMode")} />
+          <StatusRow icon={<Building2 aria-hidden="true" className="h-4 w-4" />} label={t("transactions")} tone="blue" value={String(transactions.length)} />
+          <StatusRow icon={<Archive aria-hidden="true" className="h-4 w-4" />} label={t("dataSource")} tone="neutral" value={storageStatus.mode} />
         </div>
-      ) : null}
+      </section>
     </div>
   );
+}
+
+function DatabaseIcon() {
+  return <Archive aria-hidden="true" className="h-4 w-4" />;
 }
