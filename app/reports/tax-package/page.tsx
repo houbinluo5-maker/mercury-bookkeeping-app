@@ -176,7 +176,7 @@ export default function TaxPackagePage() {
   }
 
   async function exportTaxPackageWorkbook() {
-    const fileName = `${prefix}-workbook.xlsx`;
+    const fileName = `${prefix}-boss-finance-workbook.xlsx`;
     const allowed = await recordExportAudit({
       entityId: String(taxYear),
       entityType: "transaction",
@@ -184,7 +184,9 @@ export default function TaxPackagePage() {
       fileFormat: "xlsx",
       fileName,
       reportPeriod: `${startDate} to ${endDate}`,
-      rowCount: taxPackage.filteredTransactions.length
+      rowCount: taxPackage.filteredTransactions.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;

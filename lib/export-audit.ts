@@ -43,6 +43,8 @@ export type ExportAuditDetails = {
   fileName?: string;
   reportPeriod?: string;
   rowCount?: number;
+  sheetCount?: number;
+  workbookType?: "boss_finance_workbook";
 };
 
 export type ExportActorContext = {
@@ -137,12 +139,14 @@ export function buildExportAuditEntry(
     actor_email: actor.actorEmail ?? "",
     actor_role: actorRole,
     entity_type: entityType,
-    export_type: details.exportType,
+    export_type: details.workbookType ?? details.exportType,
     file_format: details.fileFormat ?? "",
     file_name: details.fileName ?? "",
+    permission_export_type: details.exportType,
     report_period: details.reportPeriod ?? "",
     result,
     row_count: details.rowCount ?? 0,
+    sheet_count: details.sheetCount ?? 0,
     workspace_id: actor.workspaceId ?? ""
   };
 

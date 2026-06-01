@@ -63,7 +63,7 @@ export function TransactionsTable({
     transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
 
   async function exportTransactions() {
-    const fileName = "bookkeeping-transactions.xlsx";
+    const fileName = "boss-finance-transactions.xlsx";
     const allowed = await recordExportAudit({
       entityId: "transactions",
       entityType: "transaction",
@@ -71,12 +71,14 @@ export function TransactionsTable({
       fileFormat: "xlsx",
       fileName,
       reportPeriod: "filtered",
-      rowCount: filtered.length
+      rowCount: filtered.length,
+      sheetCount: 9,
+      workbookType: "boss_finance_workbook"
     });
 
     if (!allowed) return;
 
-    downloadExcel(filtered, fileName, { reportPeriod: "filtered", title: "罗厚彬记账表 - 交易明细" });
+    downloadExcel(filtered, fileName, { reportPeriod: "filtered", title: "老板财务汇报表 - 每笔账明细" });
   }
 
   function StatusBadges({ transaction }: { transaction: Transaction }) {

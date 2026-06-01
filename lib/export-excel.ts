@@ -50,6 +50,8 @@ const AMBER = "FEF3C7";
 const GREEN = "DCFCE7";
 const RED = "FEE2E2";
 
+export const BOSS_FINANCE_WORKBOOK_SHEET_COUNT = 9;
+
 const STYLE = {
   amber: 8,
   date: 5,
@@ -459,6 +461,716 @@ function taxLineSummarySheet(transactions: Transaction[]): WorksheetDefinition {
   };
 }
 
+const bossDetailHeaders = [
+  "日期",
+  "月份",
+  "交易类型",
+  "业务模块",
+  "分类",
+  "这笔钱是干什么的",
+  "收入金额",
+  "支出金额",
+  "净额",
+  "币种",
+  "支付方式",
+  "账户/卡号",
+  "商家/平台",
+  "交易对象",
+  "订单号/发票号",
+  "票据状态",
+  "是否已核对",
+  "是否可报销",
+  "风险标记",
+  "老板备注",
+  "处理建议",
+  "原始备注",
+  "票据图片/链接"
+];
+
+const bossDetailWidths = [12, 12, 12, 14, 16, 30, 14, 14, 14, 10, 14, 20, 22, 22, 20, 12, 12, 12, 18, 22, 24, 28, 30];
+const LARGE_EXPENSE_THRESHOLD = 1000;
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function readNoteField(transaction: Transaction, label: string) {
+  const match = transaction.notes.match(new RegExp(`${escapeRegExp(label)}\\s*[:：]\\s*([^\\n\\r]+)`, "i"));
+  return match?.[1]?.trim() ?? "";
+}
+
+function transactionSearchText(transaction: Transaction) {
+  return [
+    transaction.category,
+    transaction.tax_line,
+    transaction.source,
+    transaction.vendor,
+    transaction.description,
+    transaction.notes
+  ].join(" ");
+}
+
+function bossTypeLabel(transaction: Transaction) {
+  const text = transactionSearchText(transaction);
+
+  if (/Owner Contribution|业主投入|老板垫资|公司注资|个人打款到公司/i.test(text)) return "业主投入";
+  if (/Owner Draw|Member Distribution|业主提取|个人账户|提现给老板|老板个人账户/i.test(text)) return "业主提取";
+  if (/Reimbursement|报销/i.test(text)) return "报销";
+  if (/Investment Transfer|Internal Transfer|转账|转入|转出|transfer/i.test(text)) return "转账";
+  if (numberValue(transaction.money_in) > 0 && numberValue(transaction.money_out) <= 0) return "收入";
+
+  return "支出";
+}
+
+function merchantOrPlatform(transaction: Transaction) {
+  return textValue(transaction.vendor || transaction.source || readNoteField(transaction, "商家/平台"));
+}
+
+function accountOrCard(transaction: Transaction) {
+  return readNoteField(transaction, "账户/卡号") || transaction.account || "";
+}
+
+function counterparty(transaction: Transaction) {
+  return readNoteField(transaction, "交易对象") || readNoteField(transaction, "商家/平台") || merchantOrPlatform(transaction);
+}
+
+function bossReceiptStatus(transaction: Transaction) {
+  const explicit = readNoteField(transaction, "票据状态");
+
+  if (/已上传|已保存|uploaded|linked/i.test(explicit)) return explicit.includes("保存") ? "已保存" : "已上传";
+  if (/无需|not required|optional/i.test(explicit)) return "无需";
+  if (/待补|缺失|缺票|missing/i.test(explicit)) return "待补";
+  if (transaction.receipt_link) return "已上传";
+  if (!transaction.receipt_required) return "无需";
+  return "缺失票据";
+}
+
+function bossIsMissingReceipt(transaction: Transaction) {
+  const status = bossReceiptStatus(transaction);
+  return transaction.receipt_required && !transaction.receipt_link && status !== "无需";
+}
+
+function bossIsReimbursable(transaction: Transaction) {
+  const explicit = readNoteField(transaction, "是否可报销");
+
+  if (/是|yes|true/i.test(explicit)) return true;
+  if (/否|no|false/i.test(explicit)) return false;
+  return isReimbursable(transaction);
+}
+
+function hasTaxReviewRisk(transaction: Transaction) {
+  return (
+    !transaction.category ||
+    transaction.category === "Uncategorized" ||
+    !transaction.tax_line ||
+    transaction.tax_line === "Needs review" ||
+    /needs review|review manually|uncategorized|待分类|待复核|需CPA复核/i.test(transactionSearchText(transaction))
+  );
+}
+
+function businessModule(transaction: Transaction) {
+  const text = transactionSearchText(transaction);
+  const type = bossTypeLabel(transaction);
+
+  if (type === "业主投入" || type === "业主提取") return "业主资金";
+  if (/Advertising Expense|广告|Meta|Facebook|FB 广告|Google Ads|TikTok Ads/i.test(text)) return "广告投放";
+  if (/Product Cost|COGS|库存|采购|供应商|进货|拿货|货款/i.test(text)) return "库存采购";
+  if (/Revenue|销售|Shopify 打款|Shopify 销售|客户付款|订单收入/i.test(text)) return "平台收入";
+  if (/Software Expense|Website \/ Hosting|软件|订阅|Shopify App|Shopify 应用|插件|月费/i.test(text)) return "软件工具";
+  if (/Shipping|Fulfillment|物流|运费|快递|仓储|delivery/i.test(text)) return "物流仓储";
+  if (/Bank Fees|Payment Processing Fees|手续费|PayPal|bank fee|processing fee/i.test(text)) return "银行手续费";
+
+  return "其他";
+}
+
+export function getBossTransactionPurpose(transaction: Transaction) {
+  const businessArea = businessModule(transaction);
+  const merchant = merchantOrPlatform(transaction);
+  const description = textValue(transaction.description);
+  const type = bossTypeLabel(transaction);
+
+  if (businessArea === "广告投放") return `${merchant || "广告平台"} 广告投放支出`;
+  if (businessArea === "平台收入" && type === "收入") return `${merchant || "电商平台"} 销售回款`;
+  if (businessArea === "库存采购") return /潮玩/.test(description) ? "采购潮玩库存" : "采购库存支出";
+  if (type === "业主提取") return "业主提取 / 转至个人账户";
+  if (type === "业主投入") return "业主投入公司资金";
+  if (businessArea === "软件工具") return `${merchant ? `${merchant} ` : ""}软件/应用订阅费`;
+  if (businessArea === "银行手续费") return `${merchant ? `${merchant} ` : ""}银行或支付手续费`;
+  if (businessArea === "物流仓储") return "物流运费支出";
+
+  const readable = [merchant, description].filter(Boolean).join(" - ").trim();
+  if (readable) return readable.slice(0, 120);
+
+  return `${categoryLabel(transaction.category) || "未分类"}${type}交易`;
+}
+
+function transactionRiskFlags(transaction: Transaction) {
+  const risks: string[] = [];
+
+  if (bossIsMissingReceipt(transaction)) risks.push("缺票据");
+  if (!transaction.reconciled) risks.push("未核对");
+  if (numberValue(transaction.money_out) > LARGE_EXPENSE_THRESHOLD) risks.push("大额支出");
+  if (bossTypeLabel(transaction) === "业主提取") risks.push("需老板确认");
+  if (hasTaxReviewRisk(transaction)) risks.push("需CPA复核");
+
+  return risks.length ? risks : ["正常"];
+}
+
+function riskStyle(risks: string[] | string) {
+  const text = Array.isArray(risks) ? risks.join(" ") : risks;
+
+  if (/正常/.test(text)) return STYLE.green;
+  if (/大额支出|需老板确认|需CPA复核/.test(text)) return STYLE.red;
+  if (/缺票据|未核对|需要关注/.test(text)) return STYLE.amber;
+  return STYLE.text;
+}
+
+function suggestionForRisks(risks: string[] | string) {
+  const text = Array.isArray(risks) ? risks.join(" ") : risks;
+  const suggestions: string[] = [];
+
+  if (/缺票据/.test(text)) suggestions.push("请补充收据或发票");
+  if (/未核对/.test(text)) suggestions.push("请完成银行对账");
+  if (/大额支出/.test(text)) suggestions.push("建议老板复核");
+  if (/需老板确认/.test(text)) suggestions.push("请老板确认资金用途");
+  if (/需CPA复核/.test(text)) suggestions.push("请CPA确认税务分类");
+
+  return suggestions.length ? Array.from(new Set(suggestions)).join("；") : "无需处理";
+}
+
+function todoPriority(transaction: Transaction) {
+  const risks = transactionRiskFlags(transaction);
+
+  if (risks.includes("缺票据") && risks.includes("大额支出")) return "高";
+  if (risks.includes("需老板确认") && risks.includes("大额支出")) return "高";
+  if (risks.some((risk) => risk !== "正常")) return "中";
+  if (!transaction.description && !transaction.notes) return "低";
+  return "";
+}
+
+function ownerForRisks(risks: string[] | string) {
+  const text = Array.isArray(risks) ? risks.join(" ") : risks;
+
+  if (/需CPA复核/.test(text)) return "CPA";
+  if (/需老板确认|大额支出/.test(text)) return "老板";
+  return "运营";
+}
+
+function missingReceiptAmount(transactions: Transaction[]) {
+  return transactions.filter(bossIsMissingReceipt).reduce((sum, transaction) => sum + numberValue(transaction.money_out), 0);
+}
+
+function totalIncome(transactions: Transaction[]) {
+  return transactions.reduce((sum, transaction) => sum + numberValue(transaction.money_in), 0);
+}
+
+function totalExpense(transactions: Transaction[]) {
+  return transactions.reduce((sum, transaction) => sum + numberValue(transaction.money_out), 0);
+}
+
+function expenseByModule(transactions: Transaction[], module: string) {
+  return transactions
+    .filter((transaction) => businessModule(transaction) === module)
+    .reduce((sum, transaction) => sum + numberValue(transaction.money_out), 0);
+}
+
+function incomeByType(transactions: Transaction[], type: string) {
+  return transactions
+    .filter((transaction) => bossTypeLabel(transaction) === type)
+    .reduce((sum, transaction) => sum + numberValue(transaction.money_in), 0);
+}
+
+function expenseByType(transactions: Transaction[], type: string) {
+  return transactions
+    .filter((transaction) => bossTypeLabel(transaction) === type)
+    .reduce((sum, transaction) => sum + numberValue(transaction.money_out), 0);
+}
+
+function latestMonthKey(transactions: Transaction[]) {
+  return monthlyKeys(transactions).at(-1) ?? new Date().toISOString().slice(0, 7);
+}
+
+function transactionsForMonth(transactions: Transaction[], month: string) {
+  return transactions.filter((transaction) => monthKey(transaction.date) === month);
+}
+
+function statusCell(value: string) {
+  return { style: riskStyle(value), value };
+}
+
+function money(value: unknown): ExcelCell {
+  return { kind: "money", value: numberValue(value) };
+}
+
+function noDataRow(message: string, columns: number): ExcelRow {
+  return Array.from({ length: columns }, (_, index) => (index === 0 ? message : ""));
+}
+
+function bossDashboardSheet(transactions: Transaction[]): WorksheetDefinition {
+  const focusMonth = latestMonthKey(transactions);
+  const monthTransactions = transactionsForMonth(transactions, focusMonth);
+  const income = totalIncome(monthTransactions);
+  const expense = totalExpense(monthTransactions);
+  const net = income - expense;
+  const missingCount = monthTransactions.filter(bossIsMissingReceipt).length;
+  const missingAmount = missingReceiptAmount(monthTransactions);
+  const unreconciledCount = monthTransactions.filter((transaction) => !transaction.reconciled).length;
+  const advertising = expenseByModule(monthTransactions, "广告投放");
+  const inventory = expenseByModule(monthTransactions, "库存采购");
+  const software = expenseByModule(monthTransactions, "软件工具");
+  const logistics = expenseByModule(monthTransactions, "物流仓储");
+  const reimbursableAmount = monthTransactions
+    .filter(bossIsReimbursable)
+    .reduce((sum, transaction) => sum + numberValue(transaction.money_out), 0);
+  const ownerContribution = incomeByType(monthTransactions, "业主投入");
+  const ownerDraw = expenseByType(monthTransactions, "业主提取");
+  const cpaReviewCount = monthTransactions.filter(hasTaxReviewRisk).length;
+  const rows: ExcelRow[] = [
+    [{ style: STYLE.label, value: `看板月份：${focusMonth}` }, "", "", ""],
+    ["总收入", money(income), statusCell(income > 0 ? "正常" : "需要关注"), "确认本月销售回款是否完整"],
+    ["总支出", money(expense), statusCell(expense > income && income > 0 ? "需要关注" : "正常"), "关注支出是否超过收入"],
+    ["净额", money(net), statusCell(net >= 0 ? "正常" : "需要关注"), net >= 0 ? "现金流为正" : "现金流为负，建议复核主要支出"],
+    ["当前剩余金额 / 现金余额", money(net), statusCell("正常"), "未提供期初余额时使用本月净额作为参考"],
+    ["缺失票据金额", money(missingAmount), statusCell(missingAmount > 0 ? "需要关注" : "正常"), missingAmount > 0 ? "请补充收据或发票" : "票据风险较低"],
+    ["未核对交易数", unreconciledCount, statusCell(unreconciledCount > 0 ? "需要关注" : "正常"), unreconciledCount > 0 ? "请完成银行对账" : "对账状态良好"],
+    ["可报销金额", money(reimbursableAmount), statusCell("正常"), "确认报销规则与票据完整性"],
+    ["本月广告费", money(advertising), statusCell(advertising > Math.max(1000, income * 0.3) ? "需要关注" : "正常"), "关注广告投入产出"],
+    ["本月库存采购", money(inventory), statusCell(inventory > 1000 ? "需要关注" : "正常"), "确认采购用途与库存记录"],
+    ["本月软件订阅", money(software), statusCell(software > 1000 ? "需要关注" : "正常"), "复核工具订阅是否仍在使用"],
+    ["本月物流费用", money(logistics), statusCell(logistics > 1000 ? "需要关注" : "正常"), "关注履约成本"],
+    ["业主投入", money(ownerContribution), statusCell("正常"), "确认是否为资本投入或垫资"],
+    ["业主提取", money(ownerDraw), statusCell(ownerDraw > 0 ? "需要关注" : "正常"), ownerDraw > 0 ? "请老板确认提取用途" : "无需处理"],
+    ["业主投入/提取净额", money(ownerContribution - ownerDraw), statusCell(ownerDraw > 0 ? "需要关注" : "正常"), "业主资金流需要单独确认"],
+    [],
+    [{ style: STYLE.label, value: "老板重点关注" }, "", "", ""],
+    ["关注事项", "金额/数量", "风险等级", "处理建议"],
+    ["缺失票据", `${missingCount} 笔 / ${missingAmount.toFixed(2)}`, statusCell(missingCount > 0 ? "需要关注" : "正常"), missingCount > 0 ? "请补充收据或发票" : "无需处理"],
+    ["广告费过高", money(advertising), statusCell(advertising > Math.max(1000, income * 0.3) ? "需要关注" : "正常"), "复核广告预算与投放效果"],
+    ["库存采购较大", money(inventory), statusCell(inventory > 1000 ? "需要关注" : "正常"), "确认供应商、采购清单和票据"],
+    ["未核对交易", unreconciledCount, statusCell(unreconciledCount > 0 ? "需要关注" : "正常"), unreconciledCount > 0 ? "请完成银行对账" : "无需处理"],
+    ["业主提取", money(ownerDraw), statusCell(ownerDraw > 0 ? "需要关注" : "正常"), ownerDraw > 0 ? "请老板确认提取用途" : "无需处理"],
+    ["待CPA复核", cpaReviewCount, statusCell(cpaReviewCount > 0 ? "需要关注" : "正常"), cpaReviewCount > 0 ? "请CPA确认税务分类" : "无需处理"]
+  ];
+
+  return {
+    headers: ["指标/关注事项", "金额/数量", "风险等级", "处理建议"],
+    instruction: "用于快速查看收入、支出、现金流、票据风险和待处理事项。",
+    name: "老板看板",
+    rows,
+    title: "老板财务看板 Executive Finance Dashboard",
+    widths: [24, 20, 14, 34]
+  };
+}
+
+function bossTransactionRows(transactions: Transaction[]): ExcelRow[] {
+  return transactions.map((transaction, index) => {
+    const rowNumber = index + 4;
+    const risks = transactionRiskFlags(transaction);
+
+    return [
+      { kind: "date", value: transaction.date },
+      { formula: `TEXT(A${rowNumber},"yyyy-mm")`, kind: "month", value: monthKey(transaction.date) },
+      bossTypeLabel(transaction),
+      businessModule(transaction),
+      categoryLabel(transaction.category),
+      getBossTransactionPurpose(transaction),
+      money(transaction.money_in),
+      money(transaction.money_out),
+      { formula: `G${rowNumber}-H${rowNumber}`, kind: "money", value: numberValue(transaction.money_in) - numberValue(transaction.money_out) },
+      transaction.currency || "USD",
+      paymentMethod(transaction),
+      accountOrCard(transaction),
+      merchantOrPlatform(transaction),
+      counterparty(transaction),
+      orderOrInvoice(transaction),
+      statusCell(bossReceiptStatus(transaction)),
+      transaction.reconciled ? "是" : statusCell("否"),
+      bossIsReimbursable(transaction) ? "是" : "否",
+      { style: riskStyle(risks), value: risks.join(" / ") },
+      "",
+      suggestionForRisks(risks),
+      transaction.notes,
+      transaction.receipt_link
+    ] satisfies ExcelRow;
+  });
+}
+
+function bossTransactionDetailSheet(transactions: Transaction[]): WorksheetDefinition {
+  return {
+    headers: bossDetailHeaders,
+    instruction: "用老板能直接理解的方式解释每一笔钱的用途、风险、票据和对账状态。",
+    name: "每笔账明细",
+    rows: transactions.length ? bossTransactionRows(transactions) : [noDataRow("暂无交易明细。", bossDetailHeaders.length)],
+    title: "每笔账明细 Boss-Readable Transaction Detail",
+    widths: bossDetailWidths
+  };
+}
+
+function todoSheet(transactions: Transaction[]): WorksheetDefinition {
+  const rows = transactions
+    .filter((transaction) => transactionRiskFlags(transaction).some((risk) => risk !== "正常") || (!transaction.description && !transaction.notes))
+    .map((transaction) => {
+      const risks = transactionRiskFlags(transaction);
+
+      return [
+        todoPriority(transaction),
+        { kind: "date", value: transaction.date },
+        { style: riskStyle(risks), value: risks.join(" / ") },
+        money(numberValue(transaction.money_in) - numberValue(transaction.money_out)),
+        merchantOrPlatform(transaction),
+        getBossTransactionPurpose(transaction),
+        `${bossReceiptStatus(transaction)} / ${transaction.reconciled ? "已核对" : "未核对"}`,
+        suggestionForRisks(risks),
+        ownerForRisks(risks),
+        "",
+        transaction.receipt_link,
+        transaction.notes
+      ] satisfies ExcelRow;
+    });
+
+  return {
+    headers: ["优先级", "日期", "问题类型", "金额", "商家/平台", "这笔钱是干什么的", "当前状态", "处理建议", "负责人", "完成状态", "票据链接", "备注"],
+    instruction: "仅列出缺票据、未核对、大额支出、业主提取或需要 CPA 复核的交易，方便先处理风险项。",
+    name: "待处理事项",
+    rows: rows.length ? rows : [noDataRow("当前没有需要处理的事项。", 12)],
+    title: "待处理事项 Action Items",
+    widths: [10, 12, 18, 14, 22, 30, 18, 28, 12, 12, 30, 28]
+  };
+}
+
+function bossMonthlySummarySheet(transactions: Transaction[]): WorksheetDefinition {
+  const rows: ExcelRow[] = monthlyKeys(transactions).map((key) => {
+    const monthTransactions = transactionsForMonth(transactions, key);
+    const income = totalIncome(monthTransactions);
+    const expense = totalExpense(monthTransactions);
+
+    return [
+      { kind: "month", value: key },
+      money(income),
+      money(expense),
+      money(income - expense),
+      money(expenseByModule(monthTransactions, "广告投放")),
+      money(expenseByModule(monthTransactions, "库存采购")),
+      money(expenseByModule(monthTransactions, "软件工具")),
+      money(expenseByModule(monthTransactions, "物流仓储")),
+      money(expenseByModule(monthTransactions, "银行手续费")),
+      money(incomeByType(monthTransactions, "业主投入")),
+      money(expenseByType(monthTransactions, "业主提取")),
+      money(missingReceiptAmount(monthTransactions)),
+      monthTransactions.filter(bossIsMissingReceipt).length,
+      monthTransactions.filter((transaction) => !transaction.reconciled).length,
+      "未提供"
+    ] satisfies ExcelRow;
+  });
+
+  return {
+    headers: ["月份", "总收入", "总支出", "净额", "广告费", "库存采购", "软件订阅", "物流费用", "银行手续费", "业主投入", "业主提取", "缺失票据金额", "缺失票据笔数", "未核对笔数", "月结状态"],
+    instruction: "按月份汇总收入、支出、净额、主要支出类别、票据风险和对账状态。",
+    name: "月度汇总",
+    rows: rows.length ? rows : [noDataRow("暂无月度汇总数据。", 15)],
+    title: "月度汇总 Monthly Summary",
+    widths: [12, 14, 14, 14, 14, 14, 14, 14, 14, 14, 14, 16, 14, 14, 14]
+  };
+}
+
+function categorySpendingAnalysisSheet(transactions: Transaction[]): WorksheetDefinition {
+  const expenseTransactions = transactions.filter((transaction) => numberValue(transaction.money_out) > 0);
+  const total = totalExpense(expenseTransactions);
+  const grouped = new Map<string, Transaction[]>();
+
+  for (const transaction of expenseTransactions) {
+    const key = categoryLabel(transaction.category) || "未分类";
+    grouped.set(key, [...(grouped.get(key) ?? []), transaction]);
+  }
+
+  const rows = Array.from(grouped.entries())
+    .map(([category, categoryTransactions]) => {
+      const amount = totalExpense(categoryTransactions);
+      const missing = categoryTransactions.filter(bossIsMissingReceipt).length;
+      const needsAttention =
+        amount > Math.max(LARGE_EXPENSE_THRESHOLD, total * 0.3) ||
+        missing > 0 ||
+        categoryTransactions.some(hasTaxReviewRisk);
+
+      return [
+        category,
+        businessModule(categoryTransactions[0]),
+        money(amount),
+        total > 0 ? `${Math.round((amount / total) * 1000) / 10}%` : "0%",
+        categoryTransactions.length,
+        missing,
+        statusCell(needsAttention ? "需要关注" : "正常"),
+        needsAttention ? "金额较高、缺票据或分类待复核" : "支出结构正常"
+      ] satisfies ExcelRow;
+    })
+    .sort((left, right) => numberValue((right[2] as ExcelCell).value) - numberValue((left[2] as ExcelCell).value));
+
+  return {
+    headers: ["分类", "业务模块", "支出金额", "占总支出比例", "交易笔数", "缺票据笔数", "是否需要关注", "说明"],
+    instruction: "展示钱主要花在哪里，以及哪些分类因为金额、票据或税务分类需要关注。",
+    name: "分类支出分析",
+    rows: rows.length ? rows : [noDataRow("暂无支出分类数据。", 8)],
+    title: "分类支出分析 Category Spending Analysis",
+    widths: [18, 14, 14, 14, 12, 14, 16, 32]
+  };
+}
+
+function accountCashFlowSheet(transactions: Transaction[]): WorksheetDefinition {
+  const grouped = new Map<string, Transaction[]>();
+
+  for (const transaction of transactions) {
+    const key = accountOrCard(transaction) || paymentMethod(transaction) || "未提供";
+    grouped.set(key, [...(grouped.get(key) ?? []), transaction]);
+  }
+
+  const rows = Array.from(grouped.entries())
+    .map(([account, accountTransactions]) => {
+      const income = totalIncome(accountTransactions);
+      const expense = totalExpense(accountTransactions);
+      const moduleCounts = accountTransactions.reduce<Record<string, number>>((counts, transaction) => {
+        const businessArea = businessModule(transaction);
+        counts[businessArea] = (counts[businessArea] ?? 0) + 1;
+        return counts;
+      }, {});
+      const mainUse = Object.entries(moduleCounts).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "未提供";
+
+      return [
+        account,
+        "未提供",
+        money(income),
+        money(expense),
+        money(income - expense),
+        "未提供",
+        accountTransactions.length,
+        mainUse,
+        ""
+      ] satisfies ExcelRow;
+    })
+    .sort((left, right) => numberValue((right[4] as ExcelCell).value) - numberValue((left[4] as ExcelCell).value));
+
+  return {
+    headers: ["账户/支付方式", "期初余额", "收入", "支出", "净流入/流出", "期末余额", "交易笔数", "主要用途", "备注"],
+    instruction: "按账户、卡号或支付方式展示资金流入流出；未提供余额时保留空白并展示交易汇总。",
+    name: "账户资金流",
+    rows: rows.length ? rows : [noDataRow("暂无账户资金流数据。", 9)],
+    title: "账户资金流 Account Cash Flow",
+    widths: [22, 14, 14, 14, 16, 14, 12, 18, 28]
+  };
+}
+
+function bossShopifyRevenueSheet(transactions: Transaction[]): WorksheetDefinition {
+  const shopifyTransactions = transactions.filter(isShopifyTransaction);
+  const summarySales = shopifyTransactions.reduce((sum, transaction) => sum + numberValue(transaction.money_in), 0);
+  const summaryNet = shopifyTransactions.reduce((sum, transaction) => sum + numberValue(transaction.money_in) - numberValue(transaction.money_out), 0);
+  const summaryRows: ExcelRow[] = [
+    [{ style: STYLE.label, value: "本月订单数" }, "未提供", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    [{ style: STYLE.label, value: "本月销售额USD" }, money(summarySales), "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    [{ style: STYLE.label, value: "本月净营业额USD" }, money(summaryNet), "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    [{ style: STYLE.label, value: "折合人民币收入" }, "待填写汇率后自动计算", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    []
+  ];
+  const dataRows = shopifyTransactions.map((transaction, index) => {
+    const rowNumber = index + 4 + summaryRows.length;
+    const isIncome = numberValue(transaction.money_in) > 0;
+    const isAd = businessModule(transaction) === "广告投放";
+    const isFee = businessModule(transaction) === "银行手续费";
+
+    return [
+      { kind: "date", value: transaction.date },
+      merchantOrPlatform(transaction) || "Shopify",
+      "",
+      money(isIncome ? transaction.money_in : 0),
+      money(0),
+      money(0),
+      money(0),
+      money(0),
+      { formula: `D${rowNumber}-E${rowNumber}-F${rowNumber}+G${rowNumber}+H${rowNumber}`, kind: "money", value: isIncome ? transaction.money_in : 0 },
+      money(isFee ? transaction.money_out : 0),
+      money(isAd ? transaction.money_out : 0),
+      money(!isFee && !isAd ? transaction.money_out : 0),
+      { formula: `I${rowNumber}-J${rowNumber}-K${rowNumber}-L${rowNumber}`, kind: "money", value: numberValue(transaction.money_in) - numberValue(transaction.money_out) },
+      "",
+      { formula: `M${rowNumber}*N${rowNumber}`, kind: "money" },
+      accountOrCard(transaction),
+      transaction.notes,
+      { formula: `TEXT(A${rowNumber},"yyyy-mm")`, kind: "month", value: monthKey(transaction.date) }
+    ] satisfies ExcelRow;
+  });
+
+  return {
+    autoFilterRows: summaryRows.length + dataRows.length,
+    headers: ["日期", "店铺/品牌", "订单数", "商品销售额USD", "折扣USD", "退款USD", "运费USD", "税费USD", "总销售额USD", "手续费USD", "广告费USD", "其他成本USD", "净营业额USD", "汇率", "折合人民币收入", "到账账户", "备注", "月份"],
+    instruction: "用于老板查看 Shopify 销售、手续费、广告费和折合人民币收入；没有电商明细时保留模板。",
+    name: "Shopify营业额",
+    rows: dataRows.length ? [...summaryRows, ...dataRows] : [...summaryRows, noDataRow("暂无 Shopify 营业额数据。", 18)],
+    title: "Shopify营业额 Shopify Revenue",
+    widths: [12, 18, 10, 16, 12, 12, 12, 12, 16, 14, 14, 14, 16, 10, 18, 18, 26, 12]
+  };
+}
+
+function taxAndCpaSheet(transactions: Transaction[]): WorksheetDefinition {
+  const taxRows = groupByTaxLine(transactions).map((row) => {
+    const taxTransactions = transactions.filter((transaction) => transaction.tax_line === row.label);
+
+    return [
+      "税务分类汇总",
+      row.label,
+      money(row.net),
+      taxTransactions.length,
+      taxTransactions.filter(bossIsMissingReceipt).length,
+      "",
+      "",
+      "",
+      "",
+      ""
+    ] satisfies ExcelRow;
+  });
+  const reimbursableRows = transactions
+    .filter((transaction) => numberValue(transaction.money_out) > 0 && bossIsReimbursable(transaction))
+    .map((transaction) => [
+      "可报销支出",
+      { kind: "date", value: transaction.date },
+      money(transaction.money_out),
+      "",
+      "",
+      merchantOrPlatform(transaction),
+      getBossTransactionPurpose(transaction),
+      bossReceiptStatus(transaction),
+      "确认报销规则和票据完整性",
+      transaction.notes
+    ] satisfies ExcelRow);
+  const missingRows = transactions
+    .filter(bossIsMissingReceipt)
+    .map((transaction) => [
+      "缺失票据清单",
+      { kind: "date", value: transaction.date },
+      money(transaction.money_out),
+      "",
+      "",
+      merchantOrPlatform(transaction),
+      getBossTransactionPurpose(transaction),
+      bossReceiptStatus(transaction),
+      "请补充收据或发票",
+      transaction.receipt_link || transaction.notes
+    ] satisfies ExcelRow);
+  const reviewRows = transactions
+    .filter((transaction) => hasTaxReviewRisk(transaction) || !transaction.reconciled)
+    .map((transaction) => [
+      "待CPA复核交易",
+      { kind: "date", value: transaction.date },
+      money(numberValue(transaction.money_in) - numberValue(transaction.money_out)),
+      "",
+      "",
+      merchantOrPlatform(transaction),
+      getBossTransactionPurpose(transaction),
+      bossReceiptStatus(transaction),
+      hasTaxReviewRisk(transaction) ? "请CPA确认税务分类" : "请先完成对账",
+      transaction.notes
+    ] satisfies ExcelRow);
+  const rows: ExcelRow[] = [
+    [{ style: STYLE.label, value: "税务分类汇总" }, "", "", "", "", "", "", "", "", ""],
+    ...(taxRows.length ? taxRows : [noDataRow("暂无税务分类汇总。", 10)]),
+    [],
+    [{ style: STYLE.label, value: "可报销支出" }, "", "", "", "", "", "", "", "", ""],
+    ...(reimbursableRows.length ? reimbursableRows : [noDataRow("暂无可报销支出。", 10)]),
+    [],
+    [{ style: STYLE.label, value: "缺失票据清单" }, "", "", "", "", "", "", "", "", ""],
+    ...(missingRows.length ? missingRows : [noDataRow("暂无缺失票据。", 10)]),
+    [],
+    [{ style: STYLE.label, value: "待CPA复核交易" }, "", "", "", "", "", "", "", "", ""],
+    ...(reviewRows.length ? reviewRows : [noDataRow("暂无待 CPA 复核交易。", 10)])
+  ];
+
+  return {
+    headers: ["板块", "日期/分类", "金额", "交易笔数", "缺票据笔数", "商家/平台", "这笔钱是干什么的", "票据状态", "CPA复核建议", "备注"],
+    instruction: "帮助 CPA 快速查看税务分类、可报销支出、缺失票据和需要复核的交易。",
+    name: "税务与CPA资料",
+    rows,
+    title: "税务与CPA资料 Tax and CPA Package",
+    widths: [18, 18, 14, 12, 14, 22, 30, 12, 28, 30]
+  };
+}
+
+function readableAuditAction(action: string) {
+  const labels: Record<string, string> = {
+    category_change: "分类变更",
+    create: "创建交易",
+    delete: "删除交易",
+    delete_receipt: "删除收据",
+    export_denied: "导出被拒绝",
+    member_role_changed: "成员角色变更",
+    month_closed: "月结关闭",
+    month_reopened: "月结重开",
+    permission_denied: "权限被拒绝",
+    report_exported: "导出报表",
+    replace_receipt: "替换收据",
+    settings_updated: "设置更新",
+    tax_package_exported: "导出 CPA 资料包",
+    transactions_exported: "导出交易",
+    update: "更新交易",
+    upload_receipt: "上传收据",
+    workspace_backup_exported: "导出账本备份"
+  };
+
+  return labels[action] ?? action;
+}
+
+function bossAuditSummarySheet(auditLogs: AuditLog[] = []): WorksheetDefinition {
+  const importantActions = new Set([
+    "create",
+    "update",
+    "delete",
+    "upload_receipt",
+    "replace_receipt",
+    "delete_receipt",
+    "report_exported",
+    "tax_package_exported",
+    "transactions_exported",
+    "workspace_backup_exported",
+    "export_denied",
+    "permission_denied",
+    "settings_updated",
+    "member_role_changed",
+    "month_closed",
+    "month_reopened"
+  ]);
+  const rows = auditLogs
+    .filter((entry) => importantActions.has(entry.action))
+    .slice(0, 250)
+    .map((entry) => [
+      entry.created_at,
+      entry.actor_email || entry.actor,
+      entry.actor_role || "",
+      readableAuditAction(entry.action),
+      `${entry.entity_type}${entry.entity_id ? ` / ${entry.entity_id}` : ""}`,
+      String(entry.details?.result ?? (entry.action.includes("denied") ? "denied" : "success")),
+      entry.reason || entry.field_name || ""
+    ] satisfies ExcelRow);
+
+  return {
+    headers: ["时间", "操作人", "角色", "操作", "对象", "结果", "说明"],
+    instruction: "仅包含重要操作摘要，不包含 CSV 内容、票据文件内容、密钥、令牌或原始 JSON。",
+    name: "审计日志摘要",
+    rows: rows.length ? rows : [noDataRow("暂无可展示的审计日志摘要。", 7)],
+    title: "审计日志摘要 Audit Log Summary",
+    widths: [24, 24, 12, 18, 28, 12, 42]
+  };
+}
+
+function bossFinanceWorkbookSheets(transactions: Transaction[], auditLogs: AuditLog[] = []) {
+  return [
+    bossDashboardSheet(transactions),
+    bossTransactionDetailSheet(transactions),
+    todoSheet(transactions),
+    bossMonthlySummarySheet(transactions),
+    categorySpendingAnalysisSheet(transactions),
+    accountCashFlowSheet(transactions),
+    bossShopifyRevenueSheet(transactions),
+    taxAndCpaSheet(transactions),
+    bossAuditSummarySheet(auditLogs)
+  ];
+}
+
 function normalizeCell(cell: CellValue | ExcelCell): ExcelCell {
   if (typeof cell === "object" && cell !== null && ("value" in cell || "formula" in cell || "style" in cell || "kind" in cell)) {
     return cell as ExcelCell;
@@ -806,19 +1518,16 @@ function buildWorkbookBytes(sheets: WorksheetDefinition[]) {
   return zipFiles(files);
 }
 
-function standardWorkbookSheets(transactions: Transaction[], title: string) {
-  return [
-    dailyBookkeepingSheet(transactions),
-    shopifyRevenueSheet(transactions),
-    monthlySummarySheet(transactions),
-    summarySheet(transactions, title),
-    categorySummarySheet(transactions),
-    taxLineSummarySheet(transactions)
-  ];
+function standardWorkbookSheets(transactions: Transaction[], auditLogs: AuditLog[] = []) {
+  return bossFinanceWorkbookSheets(transactions, auditLogs);
 }
 
-export function buildExcelWorkbook(transactions: Transaction[], title = "罗厚彬记账表") {
-  return buildWorkbookBytes(standardWorkbookSheets(transactions, title));
+export function buildExcelWorkbook(
+  transactions: Transaction[],
+  _title = "老板财务汇报表",
+  auditLogs: AuditLog[] = []
+) {
+  return buildWorkbookBytes(standardWorkbookSheets(transactions, auditLogs));
 }
 
 function normalizeXlsxFilename(filename: string) {
@@ -845,11 +1554,11 @@ function downloadBytes(bytes: Uint8Array, filename: string) {
 
 export function downloadExcel(
   transactions: Transaction[],
-  filename = "bookkeeping-export.xlsx",
+  filename = "boss-finance-workbook.xlsx",
   options: DownloadExcelOptions = {}
 ) {
-  const title = options.title ?? "罗厚彬记账表";
-  downloadBytes(buildExcelWorkbook(transactions, title), filename);
+  const title = options.title ?? "老板财务汇报表";
+  downloadBytes(buildExcelWorkbook(transactions, title, options.auditLogs), filename);
 }
 
 function taxPackageCategorySheet(rows: ExcelRow[]): WorksheetDefinition {
@@ -935,17 +1644,11 @@ export function buildTaxPackageExcelWorkbook(
   data: TaxPackageWorkbookData,
   options: DownloadExcelOptions = {}
 ) {
-  const title = options.title ?? "罗厚彬记账表 - CPA税务资料包";
-  const sheets = [
-    dailyBookkeepingSheet(data.filteredTransactions),
-    monthlySummarySheet(data.filteredTransactions),
-    taxPackageCategorySheet(data.categorySummaryRows),
-    missingReceiptsSheet(data.filteredTransactions),
-    reimbursableExpenseSheet(data.filteredTransactions),
-    auditSummarySheet(options.auditLogs)
-  ];
-
-  return buildWorkbookBytes(sheets.map((sheet, index) => index === 0 ? { ...sheet, title } : sheet));
+  return buildExcelWorkbook(
+    data.filteredTransactions,
+    options.title ?? "老板财务汇报表 - CPA资料包",
+    options.auditLogs
+  );
 }
 
 export function downloadTaxPackageExcel(
