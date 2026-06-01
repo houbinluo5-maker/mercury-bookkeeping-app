@@ -40,20 +40,25 @@ export default function DashboardPage() {
       reopenedCount * 12
   );
   const unresolvedItems = stats.unreconciled_count + stats.receipts_missing_count + needsReviewCount + reopenedCount;
-  const dashboardExportFileName = `${settings.tax_year}-bookkeeping.xls`;
+  const dashboardExportFileName = `${settings.tax_year}-bookkeeping.xlsx`;
 
   async function exportDashboardReport() {
     const allowed = await recordExportAudit({
       entityId: String(settings.tax_year),
       entityType: "transaction",
       exportType: "dashboard_report",
+      fileFormat: "xlsx",
       fileName: dashboardExportFileName,
-      reportPeriod: String(settings.tax_year)
+      reportPeriod: String(settings.tax_year),
+      rowCount: yearTransactions.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(yearTransactions, dashboardExportFileName);
+    downloadExcel(yearTransactions, dashboardExportFileName, {
+      reportPeriod: String(settings.tax_year),
+      title: "罗厚彬记账表 - 年度经营看板"
+    });
   }
 
   return (

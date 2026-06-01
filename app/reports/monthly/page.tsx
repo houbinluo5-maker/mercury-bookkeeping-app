@@ -46,20 +46,25 @@ export default function MonthlyReportPage() {
   const rows = groupByCategory(reportTransactions);
   const closing = monthlyClosings.find((item) => item.id === monthlyClosingId(year, month));
   const reportPeriod = `${year}-${String(month).padStart(2, "0")}`;
-  const exportFileName = `${year}-${month}-monthly-report.xls`;
+  const exportFileName = `${year}-${month}-monthly-report.xlsx`;
 
   async function exportMonthlyReport() {
     const allowed = await recordExportAudit({
       entityId: reportPeriod,
       entityType: "transaction",
       exportType: "monthly_report",
+      fileFormat: "xlsx",
       fileName: exportFileName,
-      reportPeriod
+      reportPeriod,
+      rowCount: reportTransactions.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(reportTransactions, exportFileName);
+    downloadExcel(reportTransactions, exportFileName, {
+      reportPeriod,
+      title: `罗厚彬记账表 - ${reportPeriod} 月度报告`
+    });
   }
 
   return (

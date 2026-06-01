@@ -63,18 +63,20 @@ export function TransactionsTable({
     transactions.find((transaction) => transaction.id === editingTransactionId) ?? null;
 
   async function exportTransactions() {
-    const fileName = "bookkeeping-transactions.xls";
+    const fileName = "bookkeeping-transactions.xlsx";
     const allowed = await recordExportAudit({
       entityId: "transactions",
       entityType: "transaction",
-      exportType: "transaction_csv",
+      exportType: "transaction_xlsx",
+      fileFormat: "xlsx",
       fileName,
-      reportPeriod: "filtered"
+      reportPeriod: "filtered",
+      rowCount: filtered.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(filtered, fileName);
+    downloadExcel(filtered, fileName, { reportPeriod: "filtered", title: "罗厚彬记账表 - 交易明细" });
   }
 
   function StatusBadges({ transaction }: { transaction: Transaction }) {

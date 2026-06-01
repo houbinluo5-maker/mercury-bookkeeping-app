@@ -29,20 +29,25 @@ export default function AnnualTaxSummaryPage() {
   const summary = summarizeTransactions(reportTransactions);
   const taxRows = groupByTaxLine(reportTransactions);
   const categoryRows = groupByCategory(reportTransactions);
-  const exportFileName = `${year}-annual-tax-summary.xls`;
+  const exportFileName = `${year}-annual-tax-summary.xlsx`;
 
   async function exportAnnualTaxSummary() {
     const allowed = await recordExportAudit({
       entityId: String(year),
       entityType: "transaction",
       exportType: "annual_tax_summary",
+      fileFormat: "xlsx",
       fileName: exportFileName,
-      reportPeriod: String(year)
+      reportPeriod: String(year),
+      rowCount: reportTransactions.length
     });
 
     if (!allowed) return;
 
-    downloadExcel(reportTransactions, exportFileName);
+    downloadExcel(reportTransactions, exportFileName, {
+      reportPeriod: String(year),
+      title: `罗厚彬记账表 - ${year} 年度税务汇总`
+    });
   }
 
   return (

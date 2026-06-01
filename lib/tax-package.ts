@@ -1,4 +1,6 @@
 import type { Category, Transaction } from "@/lib/types";
+import { downloadTaxPackageExcel } from "@/lib/export-excel";
+import type { AuditLog } from "@/lib/types";
 
 export type ReceiptStatusFilter = "all" | "missing" | "linked" | "required" | "optional";
 export type ReconciliationStatusFilter = "all" | "reconciled" | "unreconciled";
@@ -37,12 +39,6 @@ export type TaxPackageSummary = {
 };
 
 export type TaxPackageRow = Array<string | number | boolean>;
-
-export type TaxPackageSheet = {
-  headers: string[];
-  name: string;
-  rows: TaxPackageRow[];
-};
 
 export type TaxPackageData = {
   categorySummaryRows: TaxPackageRow[];
@@ -575,71 +571,14 @@ export function downloadCsv(headers: string[], rows: TaxPackageRow[], filename: 
   downloadText(`\uFEFF${toCsv(headers, rows)}`, filename, "text/csv;charset=utf-8");
 }
 
-function escapeXml(value: unknown) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function cellXml(value: string | number | boolean) {
-  const type = typeof value === "number" && Number.isFinite(value) ? "Number" : "String";
-
-  return `<Cell><Data ss:Type="${type}">${escapeXml(value)}</Data></Cell>`;
-}
-
-function worksheetXml(sheet: TaxPackageSheet) {
-  const rows = [sheet.headers, ...sheet.rows]
-    .map((row) => `<Row>${row.map(cellXml).join("")}</Row>`)
-    .join("");
-
-  return `<Worksheet ss:Name="${escapeXml(sheet.name.slice(0, 31))}"><Table>${rows}</Table></Worksheet>`;
-}
-
-export function buildTaxPackageWorkbookXml(sheets: TaxPackageSheet[]) {
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-  xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
-  <Styles>
-    <Style ss:ID="Default" ss:Name="Normal">
-      <Alignment ss:Vertical="Top" />
-      <Font ss:FontName="Arial" />
-    </Style>
-  </Styles>
-  ${sheets.map(worksheetXml).join("")}
-</Workbook>`;
-}
-
-export function buildTaxPackageSheets(data: TaxPackageData): TaxPackageSheet[] {
-  return [
-    { headers: ["Metric", "Value"], name: "Summary", rows: data.summaryRows },
-    { headers: transactionLedgerHeaders, name: "Transactions", rows: data.transactionRows },
-    { headers: categorySummaryHeaders, name: "Category Summary", rows: data.categorySummaryRows },
-    { headers: pnlHeaders, name: "Monthly P&L", rows: data.monthlyPnlRows },
-    { headers: pnlHeaders, name: "Quarterly P&L", rows: data.quarterlyPnlRows },
-    { headers: reviewQueueHeaders, name: "Missing Receipts", rows: data.missingReceiptRows },
-    { headers: reviewQueueHeaders, name: "Needs Review", rows: data.needsReviewRows },
-    {
-      headers: reviewQueueHeaders,
-      name: "Owner Contributions & Draws",
-      rows: data.ownerActivityRows
-    },
-    {
-      headers: reviewQueueHeaders,
-      name: "Reconciliation Issues",
-      rows: data.reconciliationIssueRows
-    }
-  ];
-}
-
-export function downloadTaxPackageWorkbook(data: TaxPackageData, filename: string) {
-  downloadText(
-    buildTaxPackageWorkbookXml(buildTaxPackageSheets(data)),
-    filename,
-    "application/vnd.ms-excel;charset=utf-8"
-  );
+export function downloadTaxPackageWorkbook(
+  data: TaxPackageData,
+  filename: string,
+  options: { auditLogs?: AuditLog[]; reportPeriod?: string } = {}
+) {
+  downloadTaxPackageExcel(data, filename, {
+    auditLogs: options.auditLogs,
+    reportPeriod: options.reportPeriod,
+    title: "罗厚彬记账表 - CPA税务资料包"
+  });
 }

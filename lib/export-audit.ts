@@ -27,6 +27,7 @@ export const ledgerExportTypes = [
   "tax_package_csv",
   "tax_package_workbook",
   "transaction_csv",
+  "transaction_xlsx",
   "workspace_archive",
   "workspace_backup"
 ] as const;
@@ -38,8 +39,10 @@ export type ExportAuditDetails = {
   entityId?: string;
   entityType?: AuditEntityType;
   exportType: LedgerExportType;
+  fileFormat?: "csv" | "json" | "xlsx";
   fileName?: string;
   reportPeriod?: string;
+  rowCount?: number;
 };
 
 export type ExportActorContext = {
@@ -77,7 +80,7 @@ export function canExportLedgerData(
     return canExportTaxPackage(subject);
   }
 
-  if (exportType === "transaction_csv") {
+  if (exportType === "transaction_csv" || exportType === "transaction_xlsx") {
     return canExportTransactions(subject);
   }
 
@@ -98,7 +101,7 @@ export function auditActionForExport(
 ): AuditAction {
   if (result === "denied") return "export_denied";
   if (exportType === "receipt_export") return "receipts_exported";
-  if (exportType === "transaction_csv") return "transactions_exported";
+  if (exportType === "transaction_csv" || exportType === "transaction_xlsx") return "transactions_exported";
   if (exportType === "workspace_archive" || exportType === "workspace_backup") {
     return "workspace_backup_exported";
   }
@@ -135,9 +138,11 @@ export function buildExportAuditEntry(
     actor_role: actorRole,
     entity_type: entityType,
     export_type: details.exportType,
+    file_format: details.fileFormat ?? "",
     file_name: details.fileName ?? "",
     report_period: details.reportPeriod ?? "",
     result,
+    row_count: details.rowCount ?? 0,
     workspace_id: actor.workspaceId ?? ""
   };
 
