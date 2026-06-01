@@ -5,46 +5,31 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
-  BarChart3,
-  ClipboardCheck,
-  FileCheck2,
   Github,
-  KeyRound,
   Loader2,
   Mail,
-  ReceiptText,
   ShieldCheck
 } from "lucide-react";
-import { BrandLogo } from "@/components/brand/brand-logo";
+import { BrandMark } from "@/components/brand/brand-mark";
 import { useI18n } from "@/lib/i18n";
 
 export const authInputClass =
-  "h-12 w-full rounded-lg border border-slate-200 bg-white px-4 text-sm text-ink shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-mint focus:ring-4 focus:ring-mint/20 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
+  "h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-sm text-ink shadow-sm outline-none transition placeholder:text-slate-400 hover:border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400";
 
 export const primaryAuthButtonClass =
-  "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-ink bg-ink px-4 text-sm font-semibold text-white shadow-command transition hover:-translate-y-px hover:bg-marine focus:outline-none focus:ring-4 focus:ring-marine/20 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
+  "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(37,99,235,0.24)] transition hover:-translate-y-px hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0";
 
 export const secondaryAuthButtonClass =
-  "inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-ink shadow-sm transition hover:-translate-y-px hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-marine/10";
+  "inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm transition hover:-translate-y-px hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-blue-500/10";
 
-const benefitIcons = [KeyRound, ClipboardCheck, FileCheck2, ShieldCheck] as const;
+const technicalAuthCopyPattern = /MVP|Supabase|HTTP-only|Cookie|cookies|ADMIN_PASSWORD|service role|service-role/i;
 
-function BenefitCard({ index, label, value }: { index: number; label: string; value: string }) {
-  const Icon = benefitIcons[index % benefitIcons.length];
+export function sanitizeAuthDetail(message?: string) {
+  if (!message || technicalAuthCopyPattern.test(message)) {
+    return "";
+  }
 
-  return (
-    <div className="group rounded-2xl border border-white/70 bg-white/75 p-4 shadow-soft ring-1 ring-slate-900/[0.03] backdrop-blur transition hover:-translate-y-0.5 hover:bg-white">
-      <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-mint/20 bg-mint/10 text-mint">
-          <Icon aria-hidden="true" className="h-4 w-4" />
-        </span>
-        <span>
-          <span className="block text-sm font-semibold text-ink">{label}</span>
-          <span className="mt-1 block text-xs leading-5 text-slate-600">{value}</span>
-        </span>
-      </div>
-    </div>
-  );
+  return message;
 }
 
 export function GoogleGIcon({ className = "h-4 w-4" }: { className?: string }) {
@@ -121,122 +106,92 @@ export function AuthAlert({
   );
 }
 
-function FinancePreview() {
-  const { t } = useI18n();
-  const rows = [
-    { label: t("authPreviewClose"), value: "92%", tone: "text-emerald-700", width: "w-[92%]" },
-    { label: t("authPreviewReceipts"), value: "3", tone: "text-amber-700", width: "w-[42%]" },
-    { label: t("authPreviewCpa"), value: t("ready"), tone: "text-mint", width: "w-[82%]" },
-    { label: t("authPreviewAudit"), value: t("protected"), tone: "text-slate-700", width: "w-[74%]" }
-  ];
-
+function AuthIllustration() {
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/70 bg-white/80 p-4 shadow-command ring-1 ring-slate-900/[0.04] backdrop-blur">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-ink via-mint to-transparent" />
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-            {t("authPreviewEyebrow")}
-          </p>
-          <p className="mt-1 text-lg font-semibold text-ink">{t("authPreviewTitle")}</p>
+    <div className="pointer-events-none relative mt-12 h-[19rem] w-full max-w-[34rem] overflow-hidden rounded-[2rem] border border-white/18 bg-white/10 p-6 shadow-[0_30px_90px_rgba(0,12,48,0.32)] backdrop-blur-xl">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:34px_34px]" />
+      <div className="relative h-full rounded-[1.45rem] border border-white/18 bg-slate-950/16 p-5">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-cyan-300" />
+          <span className="h-2.5 w-2.5 rounded-full bg-white/45" />
+          <span className="h-2.5 w-2.5 rounded-full bg-white/30" />
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-mint/20 bg-mint/10 text-mint">
-          <BarChart3 aria-hidden="true" className="h-5 w-5" />
-        </div>
-      </div>
-      <div className="mt-5 space-y-4">
-        {rows.map((row) => (
-          <div key={row.label}>
-            <div className="flex items-center justify-between gap-4 text-xs">
-              <span className="font-medium text-slate-600">{row.label}</span>
-              <span className={`font-semibold ${row.tone}`}>{row.value}</span>
-            </div>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div className={`h-full rounded-full bg-gradient-to-r from-ink to-mint ${row.width}`} />
+        <div className="mt-8 grid grid-cols-[1.1fr_0.9fr] gap-5">
+          <div className="space-y-3">
+            <div className="h-3 w-32 rounded-full bg-white/72" />
+            <div className="h-3 w-44 rounded-full bg-white/28" />
+            <div className="mt-6 flex h-28 items-end gap-3">
+              <span className="h-12 flex-1 rounded-t-xl bg-cyan-300/70" />
+              <span className="h-20 flex-1 rounded-t-xl bg-white/72" />
+              <span className="h-16 flex-1 rounded-t-xl bg-cyan-100/62" />
+              <span className="h-24 flex-1 rounded-t-xl bg-teal-300/72" />
             </div>
           </div>
-        ))}
-      </div>
-      <div className="mt-5 flex items-center gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-xs font-medium text-slate-600">
-        <ReceiptText aria-hidden="true" className="h-4 w-4 text-mint" />
-        {t("authPreviewFooter")}
+          <div className="relative rounded-2xl border border-white/16 bg-white/12 p-4">
+            <div className="absolute inset-x-5 top-1/2 h-px bg-white/20" />
+            <svg aria-hidden="true" className="relative h-full w-full" viewBox="0 0 180 120">
+              <path d="M7 92 C35 72 45 84 70 54 C96 23 114 63 138 32 C151 15 164 22 174 14" fill="none" stroke="#67E8F9" strokeLinecap="round" strokeWidth="5" />
+              <path d="M7 92 C35 72 45 84 70 54 C96 23 114 63 138 32 C151 15 164 22 174 14" fill="none" opacity="0.18" stroke="#FFFFFF" strokeLinecap="round" strokeWidth="12" />
+            </svg>
+          </div>
+        </div>
+        <div className="mt-6 grid grid-cols-3 gap-3">
+          <div className="h-14 rounded-2xl border border-white/14 bg-white/12" />
+          <div className="h-14 rounded-2xl border border-white/14 bg-white/18" />
+          <div className="h-14 rounded-2xl border border-white/14 bg-white/12" />
+        </div>
       </div>
     </div>
+  );
+}
+
+function AuthBluePanel({ description, title }: { description: string; title: string }) {
+  const { t } = useI18n();
+
+  return (
+    <section className="relative flex min-h-[34vh] overflow-hidden bg-[radial-gradient(circle_at_28%_20%,rgba(103,232,249,0.36),transparent_28%),radial-gradient(circle_at_84%_82%,rgba(20,184,166,0.3),transparent_30%),linear-gradient(145deg,#0A2A8B_0%,#0B4FDB_48%,#06A7C6_100%)] px-6 py-8 text-white sm:px-10 lg:min-h-screen lg:px-14 lg:py-12">
+      <div className="absolute inset-0 opacity-[0.18] [background-image:linear-gradient(rgba(255,255,255,0.72)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.72)_1px,transparent_1px)] [background-size:48px_48px]" />
+      <div className="absolute -left-24 bottom-12 h-72 w-72 rounded-full bg-cyan-300/25 blur-3xl" />
+      <div className="absolute -right-20 top-16 h-80 w-80 rounded-full bg-blue-950/30 blur-3xl" />
+      <div className="relative z-10 flex w-full flex-col justify-between">
+        <div className="flex items-center gap-3">
+          <BrandMark className="shadow-[0_16px_40px_rgba(0,20,80,0.28)]" size="md" />
+          <div>
+            <p className="text-base font-semibold tracking-normal text-white">Mercury Books</p>
+            <p className="text-xs font-medium text-cyan-100">{t("authBrandSubtitle")}</p>
+          </div>
+        </div>
+        <div className="mt-12 max-w-xl lg:mt-0">
+          <h1 className="text-3xl font-semibold leading-tight tracking-normal text-white sm:text-4xl lg:text-5xl xl:text-[3.45rem]">
+            {title}
+          </h1>
+          <p className="mt-5 max-w-lg text-sm leading-7 text-blue-50/90 sm:text-base">{description}</p>
+        </div>
+        <div className="hidden lg:block">
+          <AuthIllustration />
+        </div>
+      </div>
+    </section>
   );
 }
 
 export function AuthLayout({
   children,
   description,
-  eyebrow,
   title
 }: {
   children: React.ReactNode;
   description: string;
-  eyebrow: string;
   title: string;
 }) {
-  const { t } = useI18n();
-  const benefits = [
-    [t("authBenefitControlLabel"), t("authBenefitControl")],
-    [t("authBenefitCloseLabel"), t("authBenefitClose")],
-    [t("authBenefitCpaLabel"), t("authBenefitCpa")],
-    [t("authBenefitAuditLabel"), t("authBenefitAudit")]
-  ];
-
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F7F4ED] text-ink">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_74%_32%,rgba(31,122,109,0.16),transparent_34%),radial-gradient(circle_at_18%_18%,rgba(16,42,67,0.12),transparent_32%),linear-gradient(135deg,#FBFAF7_0%,#F4F1EA_48%,#EDF4F1_100%)]" />
-      <div className="absolute inset-0 -z-10 opacity-[0.42] [background-image:linear-gradient(rgba(10,16,32,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(10,16,32,0.05)_1px,transparent_1px)] [background-size:56px_56px]" />
-      <div className="absolute left-1/2 top-12 -z-10 h-96 w-96 -translate-x-1/2 rounded-full bg-white/60 blur-3xl" />
-      <div className="mx-auto grid min-h-screen w-full max-w-7xl items-center gap-10 px-4 py-8 sm:px-6 lg:grid-cols-[1.08fr_0.92fr] lg:px-10">
-        <aside className="hidden lg:block">
-          <div className="max-w-2xl">
-            <div className="inline-flex rounded-2xl border border-white/70 bg-white/70 p-3 shadow-soft ring-1 ring-slate-900/[0.03] backdrop-blur">
-              <BrandLogo size="lg" subtitle={t("brandSubtitleAuth")} />
-            </div>
-            <p className="mt-12 text-xs font-semibold uppercase tracking-[0.16em] text-mint">{eyebrow}</p>
-            <h1 className="mt-4 max-w-2xl text-5xl font-semibold leading-[1.05] tracking-normal text-ink xl:text-6xl">
-              {title}
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-8 text-slate-700">{description}</p>
-            <p className="mt-3 max-w-xl text-sm font-medium leading-6 text-slate-500">
-              {t("authHeroSupportLine")}
-            </p>
-            <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-2">
-              {benefits.map(([label, value], index) => (
-                <BenefitCard key={label} index={index} label={label} value={value} />
-              ))}
-            </div>
-            <div className="mt-8 grid max-w-2xl gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="flex items-start gap-3 rounded-2xl border border-marine/10 bg-white/70 px-4 py-4 text-sm leading-6 text-slate-600 shadow-soft backdrop-blur">
-                <ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-mint" />
-                <p>{t("authTrustNote")}</p>
-              </div>
-              <FinancePreview />
-            </div>
-          </div>
-        </aside>
-
-        <section className="mx-auto w-full max-w-[31rem]">
-          <div className="mb-6 flex items-center justify-center lg:hidden">
-            <div className="rounded-2xl border border-white/70 bg-white/75 p-3 shadow-soft">
-              <BrandLogo size="md" subtitle={t("brandSubtitleAuth")} />
-            </div>
-          </div>
-          <div className="relative overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/95 p-5 shadow-command ring-1 ring-slate-900/[0.05] backdrop-blur-xl sm:p-8">
-            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-ink via-mint to-transparent" />
-            <div className="absolute right-8 top-0 h-24 w-24 rounded-full bg-mint/10 blur-2xl" />
-            <div className="relative">
-              {children}
-            </div>
-          </div>
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-white/70 bg-white/60 px-4 py-3 text-xs leading-5 text-slate-600 shadow-soft backdrop-blur lg:hidden">
-            <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-mint" />
-            <p>{t("authTrustNote")}</p>
-          </div>
-        </section>
-      </div>
+    <main className="min-h-screen bg-white text-ink lg:grid lg:grid-cols-[42%_58%]">
+      <AuthBluePanel description={description} title={title} />
+      <section className="flex min-h-[66vh] items-center justify-center bg-[#FBFAF7] px-5 py-10 sm:px-8 lg:min-h-screen lg:px-12">
+        <div className="w-full max-w-[28rem]">
+          {children}
+        </div>
+      </section>
     </main>
   );
 }
@@ -245,8 +200,8 @@ export function AuthSecurityNote() {
   const { t } = useI18n();
 
   return (
-    <div className="mt-5 flex w-full items-start gap-2.5 rounded-2xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-xs leading-5 text-slate-500">
-      <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-mint" />
+    <div className="mt-5 flex w-full items-start gap-2.5 text-xs leading-5 text-slate-500">
+      <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
       <p>{t("authNote")}</p>
     </div>
   );
@@ -263,9 +218,9 @@ export function AuthCardHeader({
 }) {
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-mint">{eyebrow}</p>
-      <h2 className="mt-3 text-[1.7rem] font-semibold tracking-normal text-ink">{title}</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
+      <p className="text-sm font-semibold text-blue-600">{eyebrow}</p>
+      <h2 className="mt-3 text-3xl font-semibold tracking-normal text-slate-950">{title}</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-500">{description}</p>
     </div>
   );
 }
@@ -291,13 +246,12 @@ export function RegisterPanel({
   return (
     <AuthLayout
       description={t("authHeroSubtitlePremium")}
-      eyebrow={t("secureWorkspaceAccess")}
       title={t("authHeroTitlePremium")}
     >
       <AuthCardHeader
-        description={t("registerSubtitle")}
+        description={t("authRegisterSubtitle")}
         eyebrow={t("authCreateWorkspace")}
-        title={t("createAccount")}
+        title={t("authRegisterTitle")}
       />
       {error ? (
         <AuthAlert>{error === "invite_only" ? t("authInviteOnly") : message || t("authRequestFailedFriendly")}</AuthAlert>
@@ -366,13 +320,12 @@ export function ForgotPasswordPanel({ error, message, sent }: { error?: string; 
   return (
     <AuthLayout
       description={t("authHeroSubtitlePremium")}
-      eyebrow={t("secureWorkspaceAccess")}
       title={t("authHeroTitlePremium")}
     >
       <AuthCardHeader
-        description={t("forgotPasswordSubtitle")}
+        description={t("authForgotSubtitle")}
         eyebrow={t("accountRecovery")}
-        title={t("forgotPassword")}
+        title={t("authForgotTitle")}
       />
       {sent ? <AuthAlert tone="success">{t("resetEmailSent")}</AuthAlert> : null}
       {error ? <AuthAlert>{message || t("authRequestFailedFriendly")}</AuthAlert> : null}
@@ -419,13 +372,12 @@ export function ResetPasswordPanel() {
   return (
     <AuthLayout
       description={t("authHeroSubtitlePremium")}
-      eyebrow={t("secureWorkspaceAccess")}
       title={t("authHeroTitlePremium")}
     >
       <AuthCardHeader
-        description={t("resetPasswordSubtitle")}
+        description={t("authResetSubtitle")}
         eyebrow={t("accountRecovery")}
-        title={t("resetPassword")}
+        title={t("authResetTitle")}
       />
       <form className="mt-6 space-y-4" onSubmit={onSubmit}>
         <label className="block space-y-2">
@@ -528,25 +480,32 @@ export function AuthCallbackPanel() {
       });
   }, [callbackState, t]);
 
+  const isError = status.tone === "error";
+  const safeStatusMessage = sanitizeAuthDetail(status.message);
+
   return (
     <AuthLayout
       description={t("authHeroSubtitlePremium")}
-      eyebrow={t("secureWorkspaceAccess")}
       title={t("authHeroTitlePremium")}
     >
       <div className="flex flex-col items-center text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-marine">
-          {status.tone === "loading" ? (
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-200 bg-white text-blue-600 shadow-sm">
+          {!isError ? (
             <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin" />
           ) : (
             <AlertTriangle aria-hidden="true" className="h-5 w-5 text-coral" />
           )}
         </div>
-        <h2 className="mt-5 text-2xl font-semibold text-ink">
-          {status.tone === "loading" ? t("finishingSignIn") : t("signInNeedsAttention")}
+        <h2 className="mt-5 text-2xl font-semibold text-slate-950">
+          {!isError ? t("finishingSignIn") : t("signInNeedsAttention")}
         </h2>
-        <p className="mt-3 text-sm leading-6 text-slate-600">{status.message}</p>
-        {status.tone === "error" ? (
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          {!isError ? status.message : t("oauthCallbackFailed")}
+        </p>
+        {isError && safeStatusMessage ? (
+          <p className="mt-2 max-w-sm text-xs leading-5 text-slate-400">{safeStatusMessage}</p>
+        ) : null}
+        {isError ? (
           <Link className={`${primaryAuthButtonClass} mt-6`} href={`/login?next=${encodeURIComponent(callbackState.nextPath)}`}>
             {t("backToLogin")}
           </Link>
