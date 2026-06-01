@@ -1,6 +1,10 @@
 # Mercury Bookkeeping App
 
-Private bookkeeping MVP for a US LLC ecommerce business. The app is manual-entry only and can use Supabase PostgreSQL for persistence when configured, with browser `localStorage` backup/restore kept as a fallback. It does not connect to Mercury, Shopify, Meta, TikTok, or real bank APIs.
+Open-source bookkeeping app starter for small ecommerce businesses.
+
+Mercury Bookkeeping App helps small ecommerce operators track revenue, COGS, expenses, owner draws, receipts, monthly close status, and tax-summary exports. It supports Mercury-style CSV imports, manual transaction entry, reconciliation workflows, audit logs, and Excel-compatible exports.
+
+This project is designed as a practical bookkeeping starter for ecommerce sellers, solo founders, and small businesses that need a simple internal finance dashboard without connecting live bank, Shopify, Meta, TikTok, or payment-platform credentials.
 
 ## Stack
 
